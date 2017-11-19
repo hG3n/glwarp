@@ -14,8 +14,6 @@ void main()
 {
     // red color
 //	color = vec3(1.0,0.0,0.0);
-
-    color = vec3(UV.x, UV.y, 0);
-
-//	color = texture(myTextureSampler, UV).rgb;
+//    color = vec3(UV.x, UV.y, 0);
+	color = texture(myTextureSampler, UV).rgb;
 }

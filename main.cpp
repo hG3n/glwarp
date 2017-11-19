@@ -129,7 +129,7 @@ int main() {
     glBindVertexArray(vertex_array_id);
 
     // create array containing vertex information
-    static const GLfloat vertexbuffer_data[] = {
+    static const GLfloat vertex_buffer_data[] = {
             -1.0f, -1.0f, -1.0f,
             -1.0f, -1.0f, 1.0f,
             -1.0f, 1.0f, 1.0f,
@@ -213,7 +213,7 @@ int main() {
     GLuint vertexbuffer_id;
     glGenBuffers(1, &vertexbuffer_id); // generate one buffer represented by vertexbuffer_id
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer_id);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexbuffer_data), vertexbuffer_data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_buffer_data), vertex_buffer_data, GL_STATIC_DRAW);
 
     GLuint uv_buffer_id;
     glGenBuffers(1, &uv_buffer_id);
