@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  -W -Wall -Wno-unused-parameter -Werror -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/glwarp.dir/main.cpp.o  -o glwarp -framework OpenGL -lglfw /usr/local/lib/libGLEW.dylib 
