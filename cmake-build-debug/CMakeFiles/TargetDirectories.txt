@@ -1,3 +1,0 @@
-/Users/hGen/Desktop/foo/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/Users/hGen/Desktop/foo/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/hGen/Desktop/foo/cmake-build-debug/CMakeFiles/glwarp.dir
