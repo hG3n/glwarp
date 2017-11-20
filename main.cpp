@@ -40,7 +40,7 @@ int main() {
         return -1;
     }
 
-    glfwWindowHint(GLFW_SAMPLES, 2);
+    glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
@@ -53,7 +53,7 @@ int main() {
 //    int height = mode->height;
 
     // Open a window and create its OpenGL context
-    window = glfwCreateWindow(1280, 800, "GLWarp", nullptr, nullptr);
+    window = glfwCreateWindow(1280, 800, "GLWarp", NULL, NULL);
 //    window = glfwCreateWindow(width, height, "GLWarp", glfwGetPrimaryMonitor(), NULL);
     if (window == nullptr) {
         fprintf(stderr,
@@ -90,13 +90,6 @@ int main() {
 
 
     /**
-     * load texture
-     */
-    GLuint texture = loadBMP_custom("../tex.bmp");
-    GLuint texture_id = glGetUniformLocation(program_id, "myTextureSampler");
-
-
-    /**
      * create MVP
      */
     // get handle for mvp uniform
@@ -119,14 +112,13 @@ int main() {
     // Our ModelViewProjection : multiplication of our 3 matrices
     glm::mat4 mvp = projection * view * model;
 
-
     /**
-     * create VAO
+     * load texture
      */
-    // create vertex array object (VAO)
-    GLuint vertex_array_id;
-    glGenVertexArrays(1, &vertex_array_id);
-    glBindVertexArray(vertex_array_id);
+    GLuint texture = loadBMP_custom("../tex.bmp");
+    GLuint texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+
+
 
     // create array containing vertex information
     static const GLfloat vertex_buffer_data[] = {
@@ -169,47 +161,55 @@ int main() {
     };
 
     // Two UV coordinatesfor each vertex. They were created with Blender.
-	static const GLfloat uv_buffer_data[] = {
-		0.000059f, 1.0f-0.000004f,
-		0.000103f, 1.0f-0.336048f,
-		0.335973f, 1.0f-0.335903f,
-		1.000023f, 1.0f-0.000013f,
-		0.667979f, 1.0f-0.335851f,
-		0.999958f, 1.0f-0.336064f,
-		0.667979f, 1.0f-0.335851f,
-		0.336024f, 1.0f-0.671877f,
-		0.667969f, 1.0f-0.671889f,
-		1.000023f, 1.0f-0.000013f,
-		0.668104f, 1.0f-0.000013f,
-		0.667979f, 1.0f-0.335851f,
-		0.000059f, 1.0f-0.000004f,
-		0.335973f, 1.0f-0.335903f,
-		0.336098f, 1.0f-0.000071f,
-		0.667979f, 1.0f-0.335851f,
-		0.335973f, 1.0f-0.335903f,
-		0.336024f, 1.0f-0.671877f,
-		1.000004f, 1.0f-0.671847f,
-		0.999958f, 1.0f-0.336064f,
-		0.667979f, 1.0f-0.335851f,
-		0.668104f, 1.0f-0.000013f,
-		0.335973f, 1.0f-0.335903f,
-		0.667979f, 1.0f-0.335851f,
-		0.335973f, 1.0f-0.335903f,
-		0.668104f, 1.0f-0.000013f,
-		0.336098f, 1.0f-0.000071f,
-		0.000103f, 1.0f-0.336048f,
-		0.000004f, 1.0f-0.671870f,
-		0.336024f, 1.0f-0.671877f,
-		0.000103f, 1.0f-0.336048f,
-		0.336024f, 1.0f-0.671877f,
-		0.335973f, 1.0f-0.335903f,
-		0.667969f, 1.0f-0.671889f,
-		1.000004f, 1.0f-0.671847f,
-		0.667979f, 1.0f-0.335851f
-};
+    static const GLfloat uv_buffer_data[] = {
+            0.000059f, 1.0f - 0.000004f,
+            0.000103f, 1.0f - 0.336048f,
+            0.335973f, 1.0f - 0.335903f,
+            1.000023f, 1.0f - 0.000013f,
+            0.667979f, 1.0f - 0.335851f,
+            0.999958f, 1.0f - 0.336064f,
+            0.667979f, 1.0f - 0.335851f,
+            0.336024f, 1.0f - 0.671877f,
+            0.667969f, 1.0f - 0.671889f,
+            1.000023f, 1.0f - 0.000013f,
+            0.668104f, 1.0f - 0.000013f,
+            0.667979f, 1.0f - 0.335851f,
+            0.000059f, 1.0f - 0.000004f,
+            0.335973f, 1.0f - 0.335903f,
+            0.336098f, 1.0f - 0.000071f,
+            0.667979f, 1.0f - 0.335851f,
+            0.335973f, 1.0f - 0.335903f,
+            0.336024f, 1.0f - 0.671877f,
+            1.000004f, 1.0f - 0.671847f,
+            0.999958f, 1.0f - 0.336064f,
+            0.667979f, 1.0f - 0.335851f,
+            0.668104f, 1.0f - 0.000013f,
+            0.335973f, 1.0f - 0.335903f,
+            0.667979f, 1.0f - 0.335851f,
+            0.335973f, 1.0f - 0.335903f,
+            0.668104f, 1.0f - 0.000013f,
+            0.336098f, 1.0f - 0.000071f,
+            0.000103f, 1.0f - 0.336048f,
+            0.000004f, 1.0f - 0.671870f,
+            0.336024f, 1.0f - 0.671877f,
+            0.000103f, 1.0f - 0.336048f,
+            0.336024f, 1.0f - 0.671877f,
+            0.335973f, 1.0f - 0.335903f,
+            0.667969f, 1.0f - 0.671889f,
+            1.000004f, 1.0f - 0.671847f,
+            0.667979f, 1.0f - 0.335851f
+    };
 
 
+    /**
+     * create VAO
+     */
+    // create vertex array object (VAO)
+    GLuint vertex_array_id;
+    glGenVertexArrays(1, &vertex_array_id);
+    glBindVertexArray(vertex_array_id);
     // create vertex buffer
+
     GLuint vertexbuffer_id;
     glGenBuffers(1, &vertexbuffer_id); // generate one buffer represented by vertexbuffer_id
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer_id);
@@ -240,6 +240,7 @@ int main() {
 
 
         // Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
+//        glClear(GL_COLOR_BUFFER_BIT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // use shader
@@ -274,10 +275,10 @@ int main() {
                 GL_FLOAT,                         // type
                 GL_FALSE,                         // normalized?
                 0,                                // stride
-                (void*)0                          // array buffer offset
+                (void *) 0                          // array buffer offset
         );
 
-        glDrawArrays(GL_TRIANGLES, 0, 12*3); // 3 indices starting at 0 -> 1 triangle
+        glDrawArrays(GL_TRIANGLES, 0, 12 * 3); // 3 indices starting at 0 -> 1 triangle
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
