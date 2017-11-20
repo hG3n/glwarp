@@ -5,26 +5,45 @@
 #include <string>
 #include <fstream>
 
-// Include GLEW
+// GL stuff
 #include <GL/glew.h>
-
-// Include GLFW
 #include <GLFW/glfw3.h>
 
+#include <X11/Xlib.h>
+#include <X11/Xmu/WinUtil.h>
+
+Display *display;
+Window root_window;
+int scr;
 GLFWwindow *window;
+
+static const int SCREEN_WIDTH = 800;
+static const int SCREEN_HEIGHT = 600;
 
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-using namespace glm;
-
+// function callbacks
 GLuint LoadShaders(const char *, const char *);
 
 GLuint loadBMP_custom(const char *);
 
 
 int main(void) {
+
+
+    /**
+     * get x11 client reference
+     */
+    display = XOpenDisplay(NULL);
+    scr = DefaultScreen(display);
+    root_window = DefaultRootWindow(display);
+//    int screen_w = DisplayWidth(display, scr) / 2;
+//    int screen_h = DisplayHeight(display, scr) / 2;
+    XImage *image;
+
+
     // Initialise GLFW
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
@@ -38,10 +57,9 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Open a window and create its OpenGL context
-    window = glfwCreateWindow(1024, 768, "Tutorial 05 - Textured Cube", NULL, NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
     if (window == NULL) {
-        fprintf(stderr,
-                "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n");
+        fprintf(stderr, "Failed to open GLFW window\n");
         glfwTerminate();
         return -1;
     }
@@ -59,48 +77,49 @@ int main(void) {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
+    glfwSwapInterval(0); // disable vsync
 
-    GLuint VertexArrayID;
-    glGenVertexArrays(1, &VertexArrayID);
-    glBindVertexArray(VertexArrayID);
+    GLuint vertex_array_id;
+    glGenVertexArrays(1, &vertex_array_id);
+    glBindVertexArray(vertex_array_id);
 
 
     /**
      * load shaders
      */
-    GLuint programID = LoadShaders("../simple.vert", "../simple.frag");
+    GLuint program_id = LoadShaders("../simple.vert", "../simple.frag");
 
 
     /**
      * build model view projection matrix
      */
     // Get a handle for our "MVP" uniform
-    GLuint MatrixID = glGetUniformLocation(programID, "MVP");
+    GLuint matrix_id = glGetUniformLocation(program_id, "MVP");
 
     // projection matrix
-    glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
 
     // camera matrix
-    glm::mat4 View = glm::lookAt(
+    glm::mat4 view = glm::lookAt(
             glm::vec3(0, 0, 3), // Camera is at (4,3,3), in World Space
             glm::vec3(0, 0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
     // model
-    glm::mat4 Model = glm::mat4(1.0f);
+    glm::mat4 model = glm::mat4(1.0f);
 
     // MVP
-    glm::mat4 MVP = Projection * View * Model; // Remember, matrix multiplication is the other way around
+    glm::mat4 MVP = projection * view * model; // Remember, matrix multiplication is the other way around
 
 
     /**
-     * load texture from file
+     * load screen_texture from file
      */
-    GLuint Texture = loadBMP_custom("../tex.bmp");
-
-    // get uniform shader handle
-    GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
+//    GLuint Texture = loadBMP_custom("../tex.bmp");
+//
+//    // get uniform shader handle
+//    GLuint TextureID = glGetUniformLocation(program_id, "myTextureSampler");
 
 
     /**
@@ -108,11 +127,11 @@ int main(void) {
      */
     static const GLfloat g_vertex_buffer_data[] = {
             -1.0f, -1.0f, 0.0f,
-            -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f, 0.0f,
+            -1.0f, 1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f,
             -1.0f, -1.0f, 0.0f,
-             1.0f, -1.0f, 0.0f,
-             1.0f,  1.0f, 0.0f,
+            1.0f, -1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f,
     };
 
 
@@ -141,6 +160,31 @@ int main(void) {
 
 
     /**
+     * build screenshot texture
+     */
+    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, XYPixmap);
+//    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+
+    std::cout << image->format << std::endl;
+
+    GLuint screen_texture;
+    glGenTextures(0, &screen_texture);
+    glBindTexture(GL_TEXTURE_2D, screen_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, 3, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    GLuint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+
+    /*
+    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB,
+                      image->width, image->height,
+                      GL_RGB, GL_UNSIGNED_BYTE,
+                      image->data); // Exit with segmentation fault...
+      */
+
+    /**
      * main loop
      */
     bool running = true;
@@ -148,6 +192,12 @@ int main(void) {
     int num_frames = 0;
     while (running && glfwWindowShouldClose(window) == 0) {
 
+        // Clear the screen
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        /**
+         * print render time per frame
+         */
         double current_time = glfwGetTime();
         ++num_frames;
         if (current_time - last_time >= 1.0) {
@@ -156,21 +206,34 @@ int main(void) {
             last_time += 1.0;
         }
 
-        // Clear the screen
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        /**
+         * get screenshot
+         */
+        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+        if (!image)
+            printf("Unable to create image...\n");
 
-        // Use our shader
-        glUseProgram(programID);
 
-        // Send our transformation to the currently bound shader,
-        // in the "MVP" uniform
-        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-        // Bind our texture in Texture Unit 0
+        // use shader
+        glUseProgram(program_id);
+
+        // send transformations to shader
+        glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
+
+        // Bind our screen_texture in Texture Unit 0
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, Texture);
-        // Set our "myTextureSampler" sampler to use Texture Unit 0
-        glUniform1i(TextureID, 0);
+
+        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+//        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+
+        glBindTexture(GL_TEXTURE_2D, screen_texture);
+
+        glUniform1i(screen_texture_id, 0);
+
+//        glBindTexture(GL_TEXTURE_2D, Texture);
+//        glUniform1i(TextureID, 0);
+
 
         // 1rst attribute buffer : vertices
         glEnableVertexAttribArray(0);
@@ -196,9 +259,7 @@ int main(void) {
                 (void *) 0                          // array buffer offset
         );
 
-        // Draw the triangle !
-//        glDrawArrays(GL_TRIANGLES, 0, 12 * 3); // 12*3 indices starting at 0 -> 12 triangles
-        glDrawArrays(GL_TRIANGLES, 0, 6 * 3); // 12*3 indices starting at 0 -> 12 triangles
+        glDrawArrays(GL_TRIANGLES, 0, 6 * 3);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
@@ -214,12 +275,21 @@ int main(void) {
         }
     }
 
+
+
     // Cleanup VBO and shader
     glDeleteBuffers(1, &vertexbuffer);
     glDeleteBuffers(1, &uvbuffer);
-    glDeleteProgram(programID);
-    glDeleteTextures(1, &Texture);
-    glDeleteVertexArrays(1, &VertexArrayID);
+    glDeleteProgram(program_id);
+//    glDeleteTextures(1, &Texture);
+    glDeleteTextures(1, &screen_texture);
+    glDeleteVertexArrays(1, &vertex_array_id);
+
+    /**
+     * x11 cleanup
+     */
+    XDestroyImage(image);
+    XCloseDisplay(display);
 
     // Close OpenGL window and terminate GLFW
     glfwTerminate();
