@@ -1,6 +1,8 @@
+
 // Include standard headers
 #include <iostream>
 #include <vector>
+#include <string>
 #include <fstream>
 
 // Include GLEW
@@ -9,34 +11,23 @@
 // Include GLFW
 #include <GLFW/glfw3.h>
 
+GLFWwindow *window;
+
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-GLFWwindow *window;
-
-enum ShaderType {
-    VERTEX = 0,
-    FRAGMENT = 1
-};
-
-// function callbacks
-bool readShader(const char *, std::string &);
+using namespace glm;
 
 GLuint LoadShaders(const char *, const char *);
 
 GLuint loadBMP_custom(const char *);
 
-/**
- * main
- * @return
- */
-int main() {
 
+int main(void) {
     // Initialise GLFW
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
-        getchar();
         return -1;
     }
 
@@ -46,189 +37,116 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-
-    // get fullscreen resolution
-//    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-//    int width = mode->width;
-//    int height = mode->height;
-
     // Open a window and create its OpenGL context
-    window = glfwCreateWindow(1280, 800, "GLWarp", NULL, NULL);
-//    window = glfwCreateWindow(width, height, "GLWarp", glfwGetPrimaryMonitor(), NULL);
-    if (window == nullptr) {
+    window = glfwCreateWindow(1024, 768, "Tutorial 05 - Textured Cube", NULL, NULL);
+    if (window == NULL) {
         fprintf(stderr,
-                "Failed to open GLFW window.\n");
-        getchar();
+                "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n");
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
 
     // Initialize GLEW
-    // don't on OSX according to https://stackoverflow.com/a/27048287
-    glewExperimental = true;
+    glewExperimental = true; // Needed for core profile
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
-        getchar();
-        glfwTerminate();
         return -1;
     }
 
-    // Ensure we can capture the escape key being pressed below
+    // stuff
     glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
-
-    // further settings
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS); // accept fragment if closer to camera than former one
+    glEnable(GL_DEPTH_TEST); // enable depth test
+    glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
+
+    GLuint VertexArrayID;
+    glGenVertexArrays(1, &VertexArrayID);
+    glBindVertexArray(VertexArrayID);
 
 
     /**
      * load shaders
      */
-    GLuint program_id = LoadShaders("../simple.vert", "../simple.frag");
+    GLuint programID = LoadShaders("../simple.vert", "../simple.frag");
 
 
     /**
-     * create MVP
+     * build model view projection matrix
      */
-    // get handle for mvp uniform
-    GLuint MatrixID = glGetUniformLocation(program_id, "MVP");
+    // Get a handle for our "MVP" uniform
+    GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // projection matrix
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
-//    glm::mat4 projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f); // In world coordinates
+    glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
 
     // camera matrix
-    glm::mat4 view = glm::lookAt(
-            glm::vec3(-1, 1, 5), // camera pos world space
-            glm::vec3(0, 0, 0), // lookat
-            glm::vec3(0, 1, 0)  // up vec
+    glm::mat4 View = glm::lookAt(
+            glm::vec3(0, 0, 3), // Camera is at (4,3,3), in World Space
+            glm::vec3(0, 0, 0), // and looks at the origin
+            glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
-    // mode matrix
-    glm::mat4 model = glm::mat4(1.0f);
+    // model
+    glm::mat4 Model = glm::mat4(1.0f);
 
-    // Our ModelViewProjection : multiplication of our 3 matrices
-    glm::mat4 mvp = projection * view * model;
+    // MVP
+    glm::mat4 MVP = Projection * View * Model; // Remember, matrix multiplication is the other way around
+
 
     /**
-     * load texture
+     * load texture from file
      */
-    GLuint texture = loadBMP_custom("../tex.bmp");
-    GLuint texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+    GLuint Texture = loadBMP_custom("../tex.bmp");
+
+    // get uniform shader handle
+    GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
 
 
-
-    // create array containing vertex information
-    static const GLfloat vertex_buffer_data[] = {
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, 1.0f,
-            -1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, 1.0f, -1.0f,
-            1.0f, -1.0f, 1.0f,
-            -1.0f, -1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, 1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,
-            1.0f, -1.0f, 1.0f,
-            -1.0f, -1.0f, 1.0f,
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, 1.0f, 1.0f,
-            -1.0f, -1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, 1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, -1.0f,
-            -1.0f, 1.0f, -1.0f,
-            1.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,
-            -1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f
+    /**
+     * object data
+     */
+    static const GLfloat g_vertex_buffer_data[] = {
+            -1.0f, -1.0f, 0.0f,
+            -1.0f,  1.0f, 0.0f,
+             1.0f,  1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f,
+             1.0f, -1.0f, 0.0f,
+             1.0f,  1.0f, 0.0f,
     };
 
-    // Two UV coordinatesfor each vertex. They were created with Blender.
-    static const GLfloat uv_buffer_data[] = {
-            0.000059f, 1.0f - 0.000004f,
-            0.000103f, 1.0f - 0.336048f,
-            0.335973f, 1.0f - 0.335903f,
-            1.000023f, 1.0f - 0.000013f,
-            0.667979f, 1.0f - 0.335851f,
-            0.999958f, 1.0f - 0.336064f,
-            0.667979f, 1.0f - 0.335851f,
-            0.336024f, 1.0f - 0.671877f,
-            0.667969f, 1.0f - 0.671889f,
-            1.000023f, 1.0f - 0.000013f,
-            0.668104f, 1.0f - 0.000013f,
-            0.667979f, 1.0f - 0.335851f,
-            0.000059f, 1.0f - 0.000004f,
-            0.335973f, 1.0f - 0.335903f,
-            0.336098f, 1.0f - 0.000071f,
-            0.667979f, 1.0f - 0.335851f,
-            0.335973f, 1.0f - 0.335903f,
-            0.336024f, 1.0f - 0.671877f,
-            1.000004f, 1.0f - 0.671847f,
-            0.999958f, 1.0f - 0.336064f,
-            0.667979f, 1.0f - 0.335851f,
-            0.668104f, 1.0f - 0.000013f,
-            0.335973f, 1.0f - 0.335903f,
-            0.667979f, 1.0f - 0.335851f,
-            0.335973f, 1.0f - 0.335903f,
-            0.668104f, 1.0f - 0.000013f,
-            0.336098f, 1.0f - 0.000071f,
-            0.000103f, 1.0f - 0.336048f,
-            0.000004f, 1.0f - 0.671870f,
-            0.336024f, 1.0f - 0.671877f,
-            0.000103f, 1.0f - 0.336048f,
-            0.336024f, 1.0f - 0.671877f,
-            0.335973f, 1.0f - 0.335903f,
-            0.667969f, 1.0f - 0.671889f,
-            1.000004f, 1.0f - 0.671847f,
-            0.667979f, 1.0f - 0.335851f
+
+    static const GLfloat g_uv_buffer_data[] = {
+            0.0f, 0.0f,
+            0.0f, 1.0f,
+            1.0f, 1.0f,
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f,
     };
 
 
     /**
-     * create VAO
+     * create buffers
      */
-    // create vertex array object (VAO)
-    GLuint vertex_array_id;
-    glGenVertexArrays(1, &vertex_array_id);
-    glBindVertexArray(vertex_array_id);
-    // create vertex buffer
+    GLuint vertexbuffer;
+    glGenBuffers(1, &vertexbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
-    GLuint vertexbuffer_id;
-    glGenBuffers(1, &vertexbuffer_id); // generate one buffer represented by vertexbuffer_id
-    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer_id);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_buffer_data), vertex_buffer_data, GL_STATIC_DRAW);
-
-    GLuint uv_buffer_id;
-    glGenBuffers(1, &uv_buffer_id);
-    glBindBuffer(GL_ARRAY_BUFFER, uv_buffer_id);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(uv_buffer_data), uv_buffer_data, GL_STATIC_DRAW);
+    GLuint uvbuffer;
+    glGenBuffers(1, &uvbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
 
 
     /**
-     * draw
+     * main loop
      */
     bool running = true;
     double last_time = glfwGetTime();
     int num_frames = 0;
     while (running && glfwWindowShouldClose(window) == 0) {
-
 
         double current_time = glfwGetTime();
         ++num_frames;
@@ -238,27 +156,27 @@ int main() {
             last_time += 1.0;
         }
 
-
-        // Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
-//        glClear(GL_COLOR_BUFFER_BIT);
+        // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // use shader
-        glUseProgram(program_id);
+        // Use our shader
+        glUseProgram(programID);
 
-        // send transformation to current shader
-        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &mvp[0][0]);
+        // Send our transformation to the currently bound shader,
+        // in the "MVP" uniform
+        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-        // textureshit
+        // Bind our texture in Texture Unit 0
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glUniform1i(texture_id, 0);
+        glBindTexture(GL_TEXTURE_2D, Texture);
+        // Set our "myTextureSampler" sampler to use Texture Unit 0
+        glUniform1i(TextureID, 0);
 
-        // vertex attribute buffer
+        // 1rst attribute buffer : vertices
         glEnableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer_id);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
         glVertexAttribPointer(
-                0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+                0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
                 3,                  // size
                 GL_FLOAT,           // type
                 GL_FALSE,           // normalized?
@@ -266,9 +184,9 @@ int main() {
                 (void *) 0            // array buffer offset
         );
 
-        // UV attribute buffer
+        // 2nd attribute buffer : UVs
         glEnableVertexAttribArray(1);
-        glBindBuffer(GL_ARRAY_BUFFER, uv_buffer_id);
+        glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
         glVertexAttribPointer(
                 1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
                 2,                                // size : U+V => 2
@@ -278,7 +196,9 @@ int main() {
                 (void *) 0                          // array buffer offset
         );
 
-        glDrawArrays(GL_TRIANGLES, 0, 12 * 3); // 3 indices starting at 0 -> 1 triangle
+        // Draw the triangle !
+//        glDrawArrays(GL_TRIANGLES, 0, 12 * 3); // 12*3 indices starting at 0 -> 12 triangles
+        glDrawArrays(GL_TRIANGLES, 0, 6 * 3); // 12*3 indices starting at 0 -> 12 triangles
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
@@ -294,13 +214,12 @@ int main() {
         }
     }
 
-
-    // Cleanup VBO
-    glDeleteBuffers(1, &vertexbuffer_id);
-    glDeleteBuffers(1, &uv_buffer_id);
-    glDeleteProgram(program_id);
-    glDeleteTextures(1, &texture);
-    glDeleteVertexArrays(1, &vertex_array_id);
+    // Cleanup VBO and shader
+    glDeleteBuffers(1, &vertexbuffer);
+    glDeleteBuffers(1, &uvbuffer);
+    glDeleteProgram(programID);
+    glDeleteTextures(1, &Texture);
+    glDeleteVertexArrays(1, &VertexArrayID);
 
     // Close OpenGL window and terminate GLFW
     glfwTerminate();
@@ -308,34 +227,6 @@ int main() {
     return 0;
 }
 
-
-/**
- * read shader from hd
- * @param file_path
- * @param out_stream
- * @return
- */
-bool readShader(const char *file_path, std::string &out_stream) {
-    std::ifstream in_stream(file_path, std::ios::in);
-    if (in_stream.is_open()) {
-        std::string line = "";
-        while (getline(in_stream, line))
-            out_stream += "\n" + line;
-        in_stream.close();
-    } else {
-        std::cout << "Could not open file'" << file_path << "'!" << std::endl;
-        getchar();
-        return false;
-    }
-    return true;
-}
-
-/**
- * load shaders from give filepaths
- * @param vertex_file_path
- * @param fragment_file_path
- * @return
- */
 GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path) {
 
     // Create the shaders
@@ -431,7 +322,6 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
     return ProgramID;
 }
 
-
 GLuint loadBMP_custom(const char *imagepath) {
 
     printf("Reading image %s\n", imagepath);
@@ -447,7 +337,8 @@ GLuint loadBMP_custom(const char *imagepath) {
     // Open the file
     FILE *file = fopen(imagepath, "rb");
     if (!file) {
-        printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath);
+        printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n",
+               imagepath);
         getchar();
         return 0;
     }
