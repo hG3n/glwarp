@@ -209,6 +209,9 @@ int main(void) {
         /**
          * get screenshot
          */
+
+        // I don't really get the usage of root_window,
+        // docu says somthing about it being a drawable
         image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
         if (!image)
             printf("Unable to create image...\n");
