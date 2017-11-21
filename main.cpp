@@ -162,15 +162,18 @@ int main(void) {
     /**
      * build screenshot texture
      */
-    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, XYPixmap);
-//    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
     std::cout << image->format << std::endl;
 
     GLuint screen_texture;
     glGenTextures(0, &screen_texture);
     glBindTexture(GL_TEXTURE_2D, screen_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, image->data);
 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -204,20 +207,22 @@ int main(void) {
 
         // I don't really get the usage of root_window,
         // docu says somthing about it being a drawable
-//        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-//        if (!image)
-//            printf("Unable to create image...\n");
+        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+        if (!image)
+            printf("Unable to create image...\n");
 
         // use shader
         glUseProgram(program_id);
 
         // send transformations to shader
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
+        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
         // Bind our screen_texture in Texture Unit 0
         glActiveTexture(GL_TEXTURE0);
 
-//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+
+
 //        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
 
         glBindTexture(GL_TEXTURE_2D, screen_texture);
@@ -260,6 +265,7 @@ int main(void) {
         // Swap buffers
         glfwSwapBuffers(window);
         glfwPollEvents();
+        XDestroyImage(image);
 
         // check for keyboard input
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
@@ -281,7 +287,7 @@ int main(void) {
     /**
      * x11 cleanup
      */
-    XDestroyImage(image);
+
     XCloseDisplay(display);
 
     // Close OpenGL window and terminate GLFW
