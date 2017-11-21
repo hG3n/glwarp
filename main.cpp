@@ -12,13 +12,9 @@
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
 
-Display *display;
-Window root_window;
-int scr;
-GLFWwindow *window;
 
-static const int SCREEN_WIDTH = 800;
-static const int SCREEN_HEIGHT = 600;
+static const int SCREEN_WIDTH = 1280;
+static const int SCREEN_HEIGHT = 800;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -36,12 +32,37 @@ int main(void) {
     /**
      * get x11 client reference
      */
+
+    Display *display;
+    Window root_window;
+    int scr;
+    GLFWwindow *glfw_window;
+
     display = XOpenDisplay(NULL);
     scr = DefaultScreen(display);
     root_window = DefaultRootWindow(display);
 //    int screen_w = DisplayWidth(display, scr) / 2;
 //    int screen_h = DisplayHeight(display, scr) / 2;
     XImage *image;
+
+    XWindowAttributes win_info;
+
+//    int absx, absy, x, y;
+//    unsigned width, height;
+//    Window dummywin;
+//
+//    XGetWindowAttributes(display, root_window, &win_info);
+//    XTranslateCoordinates(display, root_window, RootWindow(display, 0), 0, 0, &absx, &absy, &dummywin);
+//
+//    win_info.x = absx;
+//    win_info.y = absy;
+//    width = win_info.width;
+//    height = win_info.height;
+//    x = absx - win_info.x;
+//    y = absy - win_info.y;
+//
+//    std::cout << "x coord calculated by X" << x <<std::endl;
+//    std::cout << "y coord calculated by X" << y <<std::endl;
 
 
     // Initialise GLFW
@@ -56,14 +77,14 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Open a window and create its OpenGL context
-    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
-    if (window == NULL) {
-        fprintf(stderr, "Failed to open GLFW window\n");
+    // Open a glfw_window and create its OpenGL context
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
+    if (glfw_window == NULL) {
+        fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
         return -1;
     }
-    glfwMakeContextCurrent(window);
+    glfwMakeContextCurrent(glfw_window);
 
     // Initialize GLEW
     glewExperimental = true; // Needed for core profile
@@ -73,7 +94,7 @@ int main(void) {
     }
 
     // stuff
-    glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
@@ -97,7 +118,7 @@ int main(void) {
     GLuint matrix_id = glGetUniformLocation(program_id, "MVP");
 
     // projection matrix
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
@@ -108,17 +129,16 @@ int main(void) {
 
     // model
     glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 scale = glm::scale(model, glm::vec3(1.6f, 1.0f, 1.0f));
 
     // MVP
-    glm::mat4 MVP = projection * view * model; // Remember, matrix multiplication is the other way around
+    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
 
 
     /**
-     * load screen_texture from file
+     * load screen_texture from file & get shader handle
      */
 //    GLuint Texture = loadBMP_custom("../tex.bmp");
-//
-//    // get uniform shader handle
 //    GLuint TextureID = glGetUniformLocation(program_id, "myTextureSampler");
 
 
@@ -133,7 +153,6 @@ int main(void) {
             1.0f, -1.0f, 0.0f,
             1.0f, 1.0f, 0.0f,
     };
-
 
     static const GLfloat g_uv_buffer_data[] = {
             0.0f, 0.0f,
@@ -162,29 +181,31 @@ int main(void) {
     /**
      * build screenshot texture
      */
+    // get initial image
     image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-//    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+    std::cout << "XImage Stats" << std::endl;
+    std::cout << " bits per pixel " << image->bits_per_pixel << std::endl;
+    std::cout << " byte order     " << image->byte_order << std::endl;
+    std::cout << " depth          " << image->depth << std::endl;
+    std::cout << " xoffset        " << image->xoffset << std::endl;
+    std::cout << " image format   " << image->format << std::endl;
 
-    std::cout << image->format << std::endl;
-
+    // create and bind new texture
     GLuint screen_texture;
     glGenTextures(0, &screen_texture);
     glBindTexture(GL_TEXTURE_2D, screen_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // specify 2D texture image
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    // get uniform texture location in fragment shader
     GLuint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
 
-    /*
-    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB,
-                      image->width, image->height,
-                      GL_RGB, GL_UNSIGNED_BYTE,
-                      image->data); // Exit with segmentation fault...
-      */
 
     /**
      * main loop
@@ -192,7 +213,7 @@ int main(void) {
     bool running = true;
     double last_time = glfwGetTime();
     int num_frames = 0;
-    while (running && glfwWindowShouldClose(window) == 0) {
+    while (running && glfwWindowShouldClose(glfw_window) == 0) {
 
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -211,13 +232,10 @@ int main(void) {
         /**
          * get screenshot
          */
-
-        // I don't really get the usage of root_window,
-        // docu says somthing about it being a drawable
         image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-        if (!image)
+        if (!image) {
             printf("Unable to create image...\n");
-
+        }
 
 
         // use shader
@@ -227,57 +245,62 @@ int main(void) {
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
 
         // Bind our screen_texture in Texture Unit 0
-        glActiveTexture(GL_TEXTURE0);
-
-        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
-
-        glBindTexture(GL_TEXTURE_2D, screen_texture);
-
+//        glActiveTexture(GL_TEXTURE0);
+//        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+//        glBindTexture(GL_TEXTURE_2D, screen_texture);
         glUniform1i(screen_texture_id, 0);
 
 //        glBindTexture(GL_TEXTURE_2D, Texture);
 //        glUniform1i(TextureID, 0);
 
 
-        // 1rst attribute buffer : vertices
+        /**
+         * specify vertex arrays of vertices and uv's
+         * draw finalyy
+         */
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
         glVertexAttribPointer(
-                0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
+                0,                  // must match shader layout
                 3,                  // size
                 GL_FLOAT,           // type
                 GL_FALSE,           // normalized?
                 0,                  // stride
-                (void *) 0            // array buffer offset
+                (void *) 0          // array buffer offset
         );
 
-        // 2nd attribute buffer : UVs
         glEnableVertexAttribArray(1);
         glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
         glVertexAttribPointer(
-                1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-                2,                                // size : U+V => 2
-                GL_FLOAT,                         // type
-                GL_FALSE,                         // normalized?
-                0,                                // stride
-                (void *) 0                          // array buffer offset
+                1,                  // must match shader layout
+                2,                  // size : U+V => 2
+                GL_FLOAT,           // type
+                GL_FALSE,           // normalized?
+                0,                  // stride
+                (void *) 0          // array buffer offset
         );
 
+        // draw
         glDrawArrays(GL_TRIANGLES, 0, 6 * 3);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
 
         // Swap buffers
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(glfw_window);
         glfwPollEvents();
 
+        // important otherwise memory will be full soon
+        XDestroyImage(image);
+
         // check for keyboard input
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
-            glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        if (glfwGetKey(glfw_window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
+            glfwGetKey(glfw_window, GLFW_KEY_Q) == GLFW_PRESS) {
             running = false;
         }
+
     }
 
 
@@ -296,7 +319,7 @@ int main(void) {
     XDestroyImage(image);
     XCloseDisplay(display);
 
-    // Close OpenGL window and terminate GLFW
+    // Close OpenGL glfw_window and terminate GLFW
     glfwTerminate();
 
     return 0;
