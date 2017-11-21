@@ -164,25 +164,17 @@ int main(void) {
      */
     image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, XYPixmap);
 //    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-
     std::cout << image->format << std::endl;
 
     GLuint screen_texture;
     glGenTextures(0, &screen_texture);
     glBindTexture(GL_TEXTURE_2D, screen_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, 3, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, image->data);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     GLuint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
-
-    /*
-    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB,
-                      image->width, image->height,
-                      GL_RGB, GL_UNSIGNED_BYTE,
-                      image->data); // Exit with segmentation fault...
-      */
 
     /**
      * main loop
@@ -198,13 +190,13 @@ int main(void) {
         /**
          * print render time per frame
          */
-        double current_time = glfwGetTime();
-        ++num_frames;
-        if (current_time - last_time >= 1.0) {
-            std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
-            num_frames = 0;
-            last_time += 1.0;
-        }
+//        double current_time = glfwGetTime();
+//        ++num_frames;
+//        if (current_time - last_time >= 1.0) {
+//            std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
+//            num_frames = 0;
+//            last_time += 1.0;
+//        }
 
         /**
          * get screenshot
@@ -212,11 +204,9 @@ int main(void) {
 
         // I don't really get the usage of root_window,
         // docu says somthing about it being a drawable
-        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-        if (!image)
-            printf("Unable to create image...\n");
-
-
+//        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+//        if (!image)
+//            printf("Unable to create image...\n");
 
         // use shader
         glUseProgram(program_id);
@@ -227,7 +217,7 @@ int main(void) {
         // Bind our screen_texture in Texture Unit 0
         glActiveTexture(GL_TEXTURE0);
 
-        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
+//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
 //        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image->data);
 
         glBindTexture(GL_TEXTURE_2D, screen_texture);
@@ -262,7 +252,7 @@ int main(void) {
                 (void *) 0                          // array buffer offset
         );
 
-        glDrawArrays(GL_TRIANGLES, 0, 6 * 3);
+        glDrawArrays(GL_TRIANGLES, 0, 2*3);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
