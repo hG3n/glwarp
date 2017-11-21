@@ -129,7 +129,7 @@ int main(void) {
 
     // model
     glm::mat4 model = glm::mat4(1.0f);
-    glm::mat4 scale = glm::scale(model, glm::vec3(1.777777f, 1.0f, 1.0f));
+    glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
 
     // MVP
     glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
