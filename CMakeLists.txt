@@ -22,7 +22,7 @@ endif ()
 
 # use pkg-config to find further libs
 pkg_check_modules(GLFW REQUIRED glfw3)
-pkg_check_modules(GLM REQUIRED glm)
+#pkg_check_modules(GLM REQUIRED glm)
 
 # libraries
 set(ALL_LIBS
