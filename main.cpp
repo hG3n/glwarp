@@ -22,7 +22,6 @@ static const int SCREEN_HEIGHT = 1080;
 
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
-GLuint loadBMP_custom(const char *);
 
 int main(void) {
     /**
@@ -32,36 +31,17 @@ int main(void) {
     Display *display;
     Window root_window;
     int scr;
-    GLFWwindow *glfw_window;
 
-    display = XOpenDisplay(NULL);
+    display = XOpenDisplay(nullptr);
     scr = DefaultScreen(display);
     root_window = DefaultRootWindow(display);
 //    int screen_w = DisplayWidth(display, scr) / 2;
 //    int screen_h = DisplayHeight(display, scr) / 2;
     XImage *image;
 
-    XWindowAttributes win_info;
-
-//    int absx, absy, x, y;
-//    unsigned width, height;
-//    Window dummywin;
-//
-//    XGetWindowAttributes(display, root_window, &win_info);
-//    XTranslateCoordinates(display, root_window, RootWindow(display, 0), 0, 0, &absx, &absy, &dummywin);
-//
-//    win_info.x = absx;
-//    win_info.y = absy;
-//    width = win_info.width;
-//    height = win_info.height;
-//    x = absx - win_info.x;
-//    y = absy - win_info.y;
-//
-//    std::cout << "x coord calculated by X" << x <<std::endl;
-//    std::cout << "y coord calculated by X" << y <<std::endl;
-
 
     // Initialise GLFW
+    GLFWwindow *glfw_window;
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
         return -1;
@@ -75,7 +55,7 @@ int main(void) {
 
     // Open a glfw_window and create its OpenGL context
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
-    if (glfw_window == NULL) {
+    if (glfw_window == nullptr) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
         return -1;
@@ -132,13 +112,6 @@ int main(void) {
 
 
     /**
-     * load screen_texture from file & get shader handle
-     */
-//    GLuint Texture = loadBMP_custom("../tex.bmp");
-//    GLuint TextureID = glGetUniformLocation(program_id, "myTextureSampler");
-
-
-    /**
      * object data
      */
     static const GLfloat g_vertex_buffer_data[] = {
@@ -180,13 +153,6 @@ int main(void) {
     // get initial image
     image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
 
-    std::cout << "XImage Stats" << std::endl;
-    std::cout << " bits per pixel " << image->bits_per_pixel << std::endl;
-    std::cout << " byte order     " << image->byte_order << std::endl;
-    std::cout << " depth          " << image->depth << std::endl;
-    std::cout << " xoffset        " << image->xoffset << std::endl;
-    std::cout << " image format   " << image->format << std::endl;
-
     // create and bind new texture
     GLuint screen_texture;
     glGenTextures(0, &screen_texture);
@@ -194,8 +160,8 @@ int main(void) {
 
     // specify 2D texture image
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    // further settings
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -217,8 +183,8 @@ int main(void) {
         /**
          * print render time per frame
          */
-        double current_time = glfwGetTime();
         ++num_frames;
+        double current_time = glfwGetTime();
         if (current_time - last_time >= 1.0) {
             std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
             num_frames = 0;
@@ -233,21 +199,14 @@ int main(void) {
             printf("Unable to create image...\n");
         }
 
-
         // use shader
         glUseProgram(program_id);
 
         // send transformations to shader
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
-//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-        // Bind our screen_texture in Texture Unit 0
-
-//        glActiveTexture(GL_TEXTURE0);
-//        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+        // create texture from captured screenshot
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//        glBindTexture(GL_TEXTURE_2D, screen_texture);
         glUniform1i(screen_texture_id, 0);
 
         /**
@@ -277,9 +236,8 @@ int main(void) {
         );
 
 
-        glDrawArrays(GL_TRIANGLES, 0, 2*3);
-
         // draw
+        glDrawArrays(GL_TRIANGLES, 0, 2*3);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
@@ -305,7 +263,6 @@ int main(void) {
     glDeleteBuffers(1, &vertexbuffer);
     glDeleteBuffers(1, &uvbuffer);
     glDeleteProgram(program_id);
-//    glDeleteTextures(1, &Texture);
     glDeleteTextures(1, &screen_texture);
     glDeleteVertexArrays(1, &vertex_array_id);
 
@@ -414,99 +371,4 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
     glDeleteShader(FragmentShaderID);
 
     return ProgramID;
-}
-
-GLuint loadBMP_custom(const char *imagepath) {
-
-    printf("Reading image %s\n", imagepath);
-
-    // Data read from the header of the BMP file
-    unsigned char header[54];
-    unsigned int dataPos;
-    unsigned int imageSize;
-    unsigned int width, height;
-    // Actual RGB data
-    unsigned char *data;
-
-    // Open the file
-    FILE *file = fopen(imagepath, "rb");
-    if (!file) {
-        printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n",
-               imagepath);
-        getchar();
-        return 0;
-    }
-
-    // Read the header, i.e. the 54 first bytes
-
-    // If less than 54 bytes are read, problem
-    if (fread(header, 1, 54, file) != 54) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    // A BMP files always begins with "BM"
-    if (header[0] != 'B' || header[1] != 'M') {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    // Make sure this is a 24bpp file
-    if (*(int *) &(header[0x1E]) != 0) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    if (*(int *) &(header[0x1C]) != 24) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-
-    // Read the information about the image
-    dataPos = *(int *) &(header[0x0A]);
-    imageSize = *(int *) &(header[0x22]);
-    width = *(int *) &(header[0x12]);
-    height = *(int *) &(header[0x16]);
-
-    // Some BMP files are misformatted, guess missing information
-    if (imageSize == 0) imageSize = width * height * 3; // 3 : one byte for each Red, Green and Blue component
-    if (dataPos == 0) dataPos = 54; // The BMP header is done that way
-
-    // Create a buffer
-    data = new unsigned char[imageSize];
-
-    // Read the actual data from the file into the buffer
-    fread(data, 1, imageSize, file);
-
-    // Everything is in memory now, the file can be closed.
-    fclose(file);
-
-    // Create one OpenGL texture
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-
-    // "Bind" the newly created texture : all future texture functions will modify this texture
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    // Give the image to OpenGL
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
-
-    // OpenGL has now copied the data. Free our own version
-    delete[] data;
-
-    // Poor filtering, or ...
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    // ... nice trilinear filtering ...
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // ... which requires mipmaps. Generate them automatically.
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Return the ID of the texture we just created
-    return textureID;
 }
