@@ -13,8 +13,10 @@
 #include <X11/Xmu/WinUtil.h>
 
 
-static const int SCREEN_WIDTH = 1280;
-static const int SCREEN_HEIGHT = 800;
+//static const int SCREEN_WIDTH = 500;
+static const int SCREEN_WIDTH = 1900;
+//static const int SCREEN_HEIGHT = 500;
+static const int SCREEN_HEIGHT = 1000;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -28,42 +30,23 @@ GLuint loadBMP_custom(const char *);
 
 int main(void) {
 
-
-    /**
-     * get x11 client reference
-     */
-
+    //get x11 client reference
     Display *display;
     Window root_window;
-    int scr;
     GLFWwindow *glfw_window;
 
     display = XOpenDisplay(NULL);
-    scr = DefaultScreen(display);
     root_window = DefaultRootWindow(display);
-//    int screen_w = DisplayWidth(display, scr) / 2;
-//    int screen_h = DisplayHeight(display, scr) / 2;
-    XImage *image;
+    // int scr;
+    // scr = DefaultScreen(display);
+    // int screen_w = DisplayWidth(display, scr) / 2;
+    // int screen_h = DisplayHeight(display, scr) / 2;
+    XImage *image; // test = XCreateImage( );
 
-    XWindowAttributes win_info;
-
-//    int absx, absy, x, y;
-//    unsigned width, height;
-//    Window dummywin;
-//
-//    XGetWindowAttributes(display, root_window, &win_info);
-//    XTranslateCoordinates(display, root_window, RootWindow(display, 0), 0, 0, &absx, &absy, &dummywin);
-//
-//    win_info.x = absx;
-//    win_info.y = absy;
-//    width = win_info.width;
-//    height = win_info.height;
-//    x = absx - win_info.x;
-//    y = absy - win_info.y;
-//
-//    std::cout << "x coord calculated by X" << x <<std::endl;
-//    std::cout << "y coord calculated by X" << y <<std::endl;
-
+    // checkout xvfb
+    // checkout xshmgetimage
+    // checkout xcopyarea
+    // google "XGetImage slow"
 
     // Initialise GLFW
     if (!glfwInit()) {
@@ -87,7 +70,7 @@ int main(void) {
     glfwMakeContextCurrent(glfw_window);
 
     // Initialize GLEW
-    glewExperimental = true; // Needed for core profile
+    glewExperimental = GL_TRUE; // Needed for core profile
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
         return -1;
@@ -104,25 +87,19 @@ int main(void) {
     glGenVertexArrays(1, &vertex_array_id);
     glBindVertexArray(vertex_array_id);
 
-
-    /**
-     * load shaders
-     */
+    // load shaders
     GLuint program_id = LoadShaders("../simple.vert", "../simple.frag");
 
-
-    /**
-     * build model view projection matrix
-     */
+    // build model view projection matrix
     // Get a handle for our "MVP" uniform
-    GLuint matrix_id = glGetUniformLocation(program_id, "MVP");
+    GLint matrix_id = glGetUniformLocation(program_id, "MVP");
 
     // projection matrix
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0, 0, 3), // Camera is at (4,3,3), in World Space
+            glm::vec3(0, 0, 2.5), // Camera is at (4,3,3), in World Space
             glm::vec3(0, 0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
@@ -134,17 +111,7 @@ int main(void) {
     // MVP
     glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
 
-
-    /**
-     * load screen_texture from file & get shader handle
-     */
-//    GLuint Texture = loadBMP_custom("../tex.bmp");
-//    GLuint TextureID = glGetUniformLocation(program_id, "myTextureSampler");
-
-
-    /**
-     * object data
-     */
+    // create quad
     static const GLfloat g_vertex_buffer_data[] = {
             -1.0f, -1.0f, 0.0f,
             -1.0f, 1.0f, 0.0f,
@@ -163,10 +130,7 @@ int main(void) {
             1.0f, 1.0f,
     };
 
-
-    /**
-     * create buffers
-     */
+    // create buffers
     GLuint vertexbuffer;
     glGenBuffers(1, &vertexbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
@@ -178,9 +142,7 @@ int main(void) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
 
 
-    /**
-     * build screenshot texture
-     */
+    // create texture from ximage
     // get initial image
     image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
 
@@ -197,19 +159,17 @@ int main(void) {
     glBindTexture(GL_TEXTURE_2D, screen_texture);
 
     // specify 2D texture image
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
     // get uniform texture location in fragment shader
-    GLuint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+    GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
 
-
-    /**
-     * main loop
-     */
+    // main loop
     bool running = true;
     double last_time = glfwGetTime();
     int num_frames = 0;
@@ -218,9 +178,7 @@ int main(void) {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        /**
-         * print render time per frame
-         */
+        // print ms per frame
         double current_time = glfwGetTime();
         ++num_frames;
         if (current_time - last_time >= 1.0) {
@@ -229,41 +187,30 @@ int main(void) {
             last_time += 1.0;
         }
 
-        /**
-         * get screenshot
-         */
+        // get screenshot
         image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-        if (!image) {
-            printf("Unable to create image...\n");
-
-        }
-
-
+//        if (!image) {
+//            printf("Unable to create image...\n");
+//        }
 
         // use shader
         glUseProgram(program_id);
 
         // send transformations to shader
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
-        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
+        // glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
         // Bind our screen_texture in Texture Unit 0
+        // glActiveTexture(GL_TEXTURE0);
+        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+        // glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-//        glActiveTexture(GL_TEXTURE0);
-//        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-//        glBindTexture(GL_TEXTURE_2D, screen_texture);
+
         glUniform1i(screen_texture_id, 0);
 
-//        glBindTexture(GL_TEXTURE_2D, Texture);
-//        glUniform1i(TextureID, 0);
-
-
-        /**
-         * specify vertex arrays of vertices and uv's
-         * draw finalyy
-         */
+        // specify vertex arrays of vertices and uv's
+        // draw
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
         glVertexAttribPointer(
@@ -286,11 +233,9 @@ int main(void) {
                 (void *) 0          // array buffer offset
         );
 
-
         glDrawArrays(GL_TRIANGLES, 0, 2*3);
 
         // draw
-
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
 
