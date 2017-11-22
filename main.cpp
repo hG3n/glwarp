@@ -13,8 +13,11 @@
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
 
-static const int SCREEN_WIDTH = 1920;
-static const int SCREEN_HEIGHT = 1080;
+
+//static const int SCREEN_WIDTH = 500;
+int SCREEN_WIDTH = 1900;
+//static const int SCREEN_HEIGHT = 500;
+int SCREEN_HEIGHT = 1000;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -24,21 +27,23 @@ static const int SCREEN_HEIGHT = 1080;
 GLuint LoadShaders(const char *, const char *);
 
 int main(void) {
-    /**
-     * get x11 client reference
-     */
 
+    //get x11 client reference
     Display *display;
     Window root_window;
-    int scr;
 
-    display = XOpenDisplay(nullptr);
-    scr = DefaultScreen(display);
+    display = XOpenDisplay(NULL);
     root_window = DefaultRootWindow(display);
-//    int screen_w = DisplayWidth(display, scr) / 2;
-//    int screen_h = DisplayHeight(display, scr) / 2;
-    XImage *image;
+    // int scr;
+    // scr = DefaultScreen(display);
+    // int screen_w = DisplayWidth(display, scr) / 2;
+    // int screen_h = DisplayHeight(display, scr) / 2;
+    XImage *image; // test = XCreateImage( );
 
+    // checkout xvfb
+    // checkout xshmgetimage
+    // checkout xcopyarea
+    // google "XGetImage slow"
 
     // Initialise GLFW
     GLFWwindow *glfw_window;
@@ -54,8 +59,15 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Open a glfw_window and create its OpenGL context
-    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
-    if (glfw_window == nullptr) {
+    //  get fullscreen resolution
+    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    int width = mode->width;
+    int height = mode->height;
+
+    SCREEN_HEIGHT = height;
+    SCREEN_WIDTH = width;
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
+    if (glfw_window == NULL) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
         return -1;
@@ -63,7 +75,7 @@ int main(void) {
     glfwMakeContextCurrent(glfw_window);
 
     // Initialize GLEW
-    glewExperimental = true; // Needed for core profile
+    glewExperimental = GL_TRUE; // Needed for core profile
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
         return -1;
@@ -80,18 +92,12 @@ int main(void) {
     glGenVertexArrays(1, &vertex_array_id);
     glBindVertexArray(vertex_array_id);
 
-
-    /**
-     * load shaders
-     */
+    // load shaders
     GLuint program_id = LoadShaders("../simple.vert", "../simple.frag");
 
-
-    /**
-     * build model view projection matrix
-     */
+    // build model view projection matrix
     // Get a handle for our "MVP" uniform
-    GLuint matrix_id = glGetUniformLocation(program_id, "MVP");
+    GLint matrix_id = glGetUniformLocation(program_id, "MVP");
 
     // projection matrix
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
@@ -132,10 +138,7 @@ int main(void) {
             1.0f, 1.0f,
     };
 
-
-    /**
-     * create buffers
-     */
+    // create buffers
     GLuint vertexbuffer;
     glGenBuffers(1, &vertexbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
@@ -147,9 +150,7 @@ int main(void) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
 
 
-    /**
-     * build screenshot texture
-     */
+    // create texture from ximage
     // get initial image
     image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
 
@@ -159,19 +160,17 @@ int main(void) {
     glBindTexture(GL_TEXTURE_2D, screen_texture);
 
     // specify 2D texture image
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-    // further settings
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
     // get uniform texture location in fragment shader
-    GLuint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+    GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
 
-
-    /**
-     * main loop
-     */
+    // main loop
     bool running = true;
     double last_time = glfwGetTime();
     int num_frames = 0;
@@ -183,6 +182,7 @@ int main(void) {
         /**
          * print render time per frame
          */
+        // print ms per frame
         ++num_frames;
         double current_time = glfwGetTime();
         if (current_time - last_time >= 1.0) {
@@ -191,9 +191,7 @@ int main(void) {
             last_time += 1.0;
         }
 
-        /**
-         * get screenshot
-         */
+        // get screenshot
         image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
         if (!image) {
             printf("Unable to create image...\n");
@@ -205,14 +203,15 @@ int main(void) {
         // send transformations to shader
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
 
-        // create texture from captured screenshot
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-        glUniform1i(screen_texture_id, 0);
-
         /**
          * specify vertex arrays of vertices and uv's
          * draw finalyy
          */
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+
+        glUniform1i(screen_texture_id, 0);
+
+        // specify vertex arrays of vertices and uv's
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
         glVertexAttribPointer(
@@ -236,9 +235,9 @@ int main(void) {
         );
 
 
-        // draw
         glDrawArrays(GL_TRIANGLES, 0, 2*3);
 
+        // draw
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
 
