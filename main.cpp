@@ -9,12 +9,12 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+// X11
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
 
-
-static const int SCREEN_WIDTH = 1280;
-static const int SCREEN_HEIGHT = 800;
+static const int SCREEN_WIDTH = 1920;
+static const int SCREEN_HEIGHT = 1080;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -22,13 +22,9 @@ static const int SCREEN_HEIGHT = 800;
 
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
-
 GLuint loadBMP_custom(const char *);
 
-
 int main(void) {
-
-
     /**
      * get x11 client reference
      */
@@ -78,7 +74,7 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Open a glfw_window and create its OpenGL context
-    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
     if (glfw_window == NULL) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
@@ -122,7 +118,7 @@ int main(void) {
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0, 0, 3), // Camera is at (4,3,3), in World Space
+            glm::vec3(0, 0, 2.5), // Camera is at (4,3,3), in World Space
             glm::vec3(0, 0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
@@ -197,7 +193,7 @@ int main(void) {
     glBindTexture(GL_TEXTURE_2D, screen_texture);
 
     // specify 2D texture image
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 //    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 //    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -235,9 +231,7 @@ int main(void) {
         image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
         if (!image) {
             printf("Unable to create image...\n");
-
         }
-
 
 
         // use shader
@@ -245,7 +239,7 @@ int main(void) {
 
         // send transformations to shader
         glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
-        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+//        glTextureSubImage2D(screen_texture, 0, 0, 0,SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
         // Bind our screen_texture in Texture Unit 0
 
@@ -255,10 +249,6 @@ int main(void) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 //        glBindTexture(GL_TEXTURE_2D, screen_texture);
         glUniform1i(screen_texture_id, 0);
-
-//        glBindTexture(GL_TEXTURE_2D, Texture);
-//        glUniform1i(TextureID, 0);
-
 
         /**
          * specify vertex arrays of vertices and uv's
