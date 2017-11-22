@@ -14,9 +14,9 @@
 
 
 //static const int SCREEN_WIDTH = 500;
-static const int SCREEN_WIDTH = 1900;
+int SCREEN_WIDTH = 1900;
 //static const int SCREEN_HEIGHT = 500;
-static const int SCREEN_HEIGHT = 1000;
+int SCREEN_HEIGHT = 1000;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -24,7 +24,6 @@ static const int SCREEN_HEIGHT = 1000;
 
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
-
 GLuint loadBMP_custom(const char *);
 
 
@@ -61,6 +60,13 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Open a glfw_window and create its OpenGL context
+    //  get fullscreen resolution
+    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    int width = mode->width;
+    int height = mode->height;
+
+    SCREEN_HEIGHT = height;
+    SCREEN_WIDTH = width;
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
     if (glfw_window == NULL) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
