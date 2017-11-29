@@ -2,7 +2,6 @@
 // Include standard headers
 #include <iostream>
 #include <vector>
-#include <string>
 #include <fstream>
 
 // GL stuff
@@ -15,35 +14,32 @@
 
 
 //static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = 1900;
+int SCREEN_WIDTH = 1920;
 //static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = 1000;
+int SCREEN_HEIGHT = 1080;
+
+bool VSYNC = true;
 
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <sstream>
 
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
+
+bool loadFile(const char *);
 
 int main(void) {
 
     //get x11 client reference
     Display *display;
-    Window root_window;
-
     display = XOpenDisplay(NULL);
+    Window root_window;
     root_window = DefaultRootWindow(display);
-    // int scr;
-    // scr = DefaultScreen(display);
-    // int screen_w = DisplayWidth(display, scr) / 2;
-    // int screen_h = DisplayHeight(display, scr) / 2;
-    XImage *image; // test = XCreateImage( );
 
-    // checkout xvfb
-    // checkout xshmgetimage
-    // checkout xcopyarea
-    // google "XGetImage slow"
+    // declare image pointer
+    XImage *image; // test = XCreateImage( );
 
     // Initialise GLFW
     GLFWwindow *glfw_window;
@@ -59,13 +55,12 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Open a glfw_window and create its OpenGL context
-    //  get fullscreen resolution
     const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     int width = mode->width;
     int height = mode->height;
 
-    SCREEN_HEIGHT = height;
-    SCREEN_WIDTH = width;
+//    SCREEN_HEIGHT = height;
+//    SCREEN_WIDTH = widthg
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
     if (glfw_window == NULL) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
@@ -86,7 +81,12 @@ int main(void) {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
-    glfwSwapInterval(0); // disable vsync
+
+
+    glfwSwapInterval(0);
+    if (VSYNC) {
+        glfwSwapInterval(1);
+    }
 
     GLuint vertex_array_id;
     glGenVertexArrays(1, &vertex_array_id);
@@ -170,6 +170,8 @@ int main(void) {
     // get uniform texture location in fragment shader
     GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
 
+    bool foo = loadFile("../mask.txt");
+
     // main loop
     bool running = true;
     double last_time = glfwGetTime();
@@ -235,7 +237,7 @@ int main(void) {
         );
 
 
-        glDrawArrays(GL_TRIANGLES, 0, 2*3);
+        glDrawArrays(GL_TRIANGLES, 0, 2 * 3);
 
         // draw
         glDisableVertexAttribArray(0);
@@ -276,6 +278,44 @@ int main(void) {
 
     return 0;
 }
+
+
+/**
+ * load file from harddisk
+ * @param filepath
+ */
+bool loadFile(const char *filepath) {
+
+
+    std::ifstream f;
+    std::string s;
+
+    f.open(filepath, std::ios::in);
+
+    if (f.is_open()) {
+
+        std::cout << "Loading file: '" << filepath << "'!" << std::endl;
+        while (!f.eof()) {
+
+            getline(f, s);
+            std::istringstream iss(s);
+
+            float x, y, z;
+            iss >> x >> y >> z;
+
+            std::cout << x << " " << y << " " << z << std::endl;
+
+        }
+
+        return true;
+    } else {
+        std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
+        return false;
+    }
+
+
+}
+
 
 GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path) {
 
@@ -371,3 +411,7 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
 
     return ProgramID;
 }
+
+
+
+
