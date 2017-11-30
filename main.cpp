@@ -18,7 +18,7 @@ int SCREEN_WIDTH = 1920;
 //static const int SCREEN_HEIGHT = 500;
 int SCREEN_HEIGHT = 1080;
 
-bool VSYNC = true;
+bool VSYNC = false;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -28,7 +28,7 @@ bool VSYNC = true;
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
 
-bool loadFile(const char *);
+bool loadFile(const char *, std::vector<glm::vec3> *);
 
 int main(void) {
 
@@ -170,7 +170,12 @@ int main(void) {
     // get uniform texture location in fragment shader
     GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
 
-    bool foo = loadFile("../mask.txt");
+    std::vector<glm::vec3> mask_vec, dome_point_vec;
+    bool foo = loadFile("../mask.txt", &mask_vec);
+    bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
+    std::cout << "mask size: " << mask_vec.size() << std::endl;
+    std::cout << "dome points size: " << dome_point_vec.size() << std::endl;
+
 
     // main loop
     bool running = true;
@@ -284,8 +289,7 @@ int main(void) {
  * load file from harddisk
  * @param filepath
  */
-bool loadFile(const char *filepath) {
-
+bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
 
     std::ifstream f;
     std::string s;
@@ -302,9 +306,10 @@ bool loadFile(const char *filepath) {
 
             float x, y, z;
             iss >> x >> y >> z;
-
             std::cout << x << " " << y << " " << z << std::endl;
 
+            // append to input vector
+            to_fill->push_back(glm::vec3(x, y, z));
         }
 
         return true;
@@ -312,7 +317,6 @@ bool loadFile(const char *filepath) {
         std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
         return false;
     }
-
 
 }
 
