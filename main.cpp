@@ -173,8 +173,8 @@ int main(void) {
     std::vector<glm::vec3> mask_vec, dome_point_vec;
     bool foo = loadFile("../mask.txt", &mask_vec);
     bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
-    std::cout << "mask size: " << mask_vec.size() << std::endl;
-    std::cout << "dome points size: " << dome_point_vec.size() << std::endl;
+    std::cout << "Number of mask points: " << mask_vec.size() << std::endl;
+    std::cout << "Number of dome plane points: " << dome_point_vec.size() << std::endl;
 
 
     // main loop
