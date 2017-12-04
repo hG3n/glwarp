@@ -14,9 +14,9 @@
 
 
 //static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = 1920;
+int SCREEN_WIDTH = 1920/1.5;
 //static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = 1080;
+int SCREEN_HEIGHT = 1080/1.5;
 
 bool VSYNC = false;
 
@@ -29,6 +29,7 @@ bool VSYNC = false;
 GLuint LoadShaders(const char *, const char *);
 
 bool loadFile(const char *, std::vector<glm::vec3> *);
+float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
 
 int main(void) {
 
@@ -104,8 +105,8 @@ int main(void) {
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0, 0, 2.5), // Camera is at (4,3,3), in World Space
-            glm::vec3(0, 0, 0), // and looks at the origin
+            glm::vec3(0.0, 0.0, 2.5), // Camera is at (4,3,3), in World Space
+            glm::vec3(0.0, 0.0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
@@ -120,34 +121,94 @@ int main(void) {
     /**
      * object data
      */
-    static const GLfloat g_vertex_buffer_data[] = {
-            -1.0f, -1.0f, 0.0f,
-            -1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 0.0f,
-            1.0f, -1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-    };
+    int row_size = 18;
+    int col_size = 32;
+    int triangle_count = 0;
+    float min_pos_x = -1.0f;
+    float max_pos_x = 1.0f;
+    float min_pos_y = -1.0f;
+    float max_pos_y = 1.0f;
+    std::vector<glm::vec3> mask_vec, dome_point_vec;
+    bool foo = loadFile("../mask.txt", &mask_vec);
+    //bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
+    std::cout << "Number of mask points: " << mask_vec.size() << std::endl;
+    //std::cout << "Number of dome plane points: " << dome_point_vec.size() << std::endl;
+    mask_vec.pop_back();
 
-    static const GLfloat g_uv_buffer_data[] = {
-            0.0f, 0.0f,
-            0.0f, 1.0f,
-            1.0f, 1.0f,
-            0.0f, 0.0f,
-            1.0f, 0.0f,
-            1.0f, 1.0f,
-    };
+//    std::cout << "show my points"<< std::endl;
+
+    for (int i = 0; i < mask_vec.size(); ++i){
+        std::cout << mask_vec[i].x << " " << mask_vec[i].y << std::endl;
+        mask_vec[i].x = mapToRange(mask_vec[i].x, 0.0f, 1.0f, -1.0f, 1.0f);
+        mask_vec[i].y = mapToRange(mask_vec[i].y, 0.0f, 1.0f, -1.0f, 1.0f);
+        mask_vec[i].z = 0.0f;
+    }
+
+    std::vector<glm::vec3> mesh_vec;
+    // create mesh
+    for (int idx = 0; idx < mask_vec.size() - col_size - 1; ++idx){
+        if (idx != col_size -1){
+            // triangle 1
+            mesh_vec.push_back(mask_vec[idx]);
+            mesh_vec.push_back(mask_vec[idx+1]);
+            mesh_vec.push_back(mask_vec[idx+col_size]);
+            // triangle 2
+            mesh_vec.push_back(mask_vec[idx+1]);
+            mesh_vec.push_back(mask_vec[idx+1+col_size]);
+            mesh_vec.push_back(mask_vec[idx+col_size]);
+            triangle_count += 2;
+        }
+    }
+    std::cout << "START quads"<< std::endl;
+//
+//    for (int i = 0; i < mesh_vec.size(); ++i){
+//        std::cout << mesh_vec[i].x << " " << mesh_vec[i].y << " " << mesh_vec[i].z << std::endl;
+//    }
+
+    std::cout << "START texs"<< std::endl;
+    std::vector<glm::vec2> tex_vec;
+
+    for (int i = 0; i < mesh_vec.size(); ++i){
+        float u = mapToRange(mesh_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+        float v = mapToRange(mesh_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+        tex_vec.push_back(glm::vec2(u,v));
+    }
+
+//    for (int i = 0; i < tex_vec.size(); ++i){
+//        std::cout << tex_vec[i].x << " " << tex_vec[i].y << std::endl;
+//    }
+
+
+//            -1.0f, -1.0f, 0.0f,
+//            -1.0f, 1.0f, 0.0f,
+//             1.0f, 1.0f, 0.0f,
+//            -1.0f, -1.0f, 0.0f,
+//             1.0f, -1.0f, 0.0f,
+//             1.0f, 1.0f, 0.0f,
+//
+//    static const GLfloat g_uv_buffer_data[] = {
+//            0.0f, 0.0f,
+//            0.0f, 1.0f,
+//            1.0f, 1.0f,
+//            0.0f, 0.0f,
+//            1.0f, 0.0f,
+//            1.0f, 1.0f,
+//    };
+
+    std::cout << "Number of mesh points: " << mesh_vec.size() << std::endl;
+    std::cout << "Number of tex points: " << tex_vec.size() << std::endl;
+
 
     // create buffers
     GLuint vertexbuffer;
     glGenBuffers(1, &vertexbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, mesh_vec.size() * sizeof(glm::vec3), &mesh_vec[0], GL_STATIC_DRAW);
 
     GLuint uvbuffer;
     glGenBuffers(1, &uvbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, tex_vec.size() * sizeof(glm::vec2), &tex_vec[0], GL_STATIC_DRAW);
 
 
     // create texture from ximage
@@ -169,13 +230,6 @@ int main(void) {
 
     // get uniform texture location in fragment shader
     GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
-
-    std::vector<glm::vec3> mask_vec, dome_point_vec;
-    bool foo = loadFile("../mask.txt", &mask_vec);
-    bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
-    std::cout << "Number of mask points: " << mask_vec.size() << std::endl;
-    std::cout << "Number of dome plane points: " << dome_point_vec.size() << std::endl;
-
 
     // main loop
     bool running = true;
@@ -242,7 +296,7 @@ int main(void) {
         );
 
 
-        glDrawArrays(GL_TRIANGLES, 0, 2 * 3);
+        glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
 
         // draw
         glDisableVertexAttribArray(0);
@@ -318,6 +372,10 @@ bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
         return false;
     }
 
+}
+
+float mapToRange(float value, float in_min, float in_max, float out_min, float out_max) {
+    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 

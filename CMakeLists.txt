@@ -24,6 +24,7 @@ endif ()
 pkg_check_modules(GLFW REQUIRED glfw3)
 #pkg_check_modules(GLM REQUIRED glm)
 
+
 # libraries
 set(ALL_LIBS
         ${OPENGL_LIBRARIES}
