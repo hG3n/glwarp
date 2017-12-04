@@ -2,6 +2,7 @@
 // Include standard headers
 #include <iostream>
 #include <vector>
+#include <map>
 #include <fstream>
 
 // GL stuff
@@ -29,6 +30,7 @@ bool VSYNC = false;
 GLuint LoadShaders(const char *, const char *);
 
 bool loadFile(const char *, std::vector<glm::vec3> *);
+bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fill);
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
 
 int main(void) {
@@ -129,6 +131,9 @@ int main(void) {
     float min_pos_y = -1.0f;
     float max_pos_y = 1.0f;
     std::vector<glm::vec3> mask_vec, dome_point_vec;
+//    std::map<glm::vec3, glm::vec3> warp_map;
+
+//    loadDomeMapFile("../screen_to_dome.domemap", &warp_map);
     bool foo = loadFile("../mask.txt", &mask_vec);
     //bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
     std::cout << "Number of mask points: " << mask_vec.size() << std::endl;
@@ -364,6 +369,43 @@ bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
 
             // append to input vector
             to_fill->push_back(glm::vec3(x, y, z));
+        }
+
+        return true;
+    } else {
+        std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
+        return false;
+    }
+}
+
+/**
+ * load file from harddisk
+ * @param filepath
+ */
+
+
+
+bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fill) {
+
+    std::ifstream f;
+    std::string s;
+
+    f.open(filepath, std::ios::in);
+
+    if (f.is_open()) {
+
+        std::cout << "Loading file: '" << filepath << "'!" << std::endl;
+        while (!f.eof()) {
+
+            getline(f, s);
+            std::istringstream iss(s);
+
+            float x1, y1, z1, x2, y2, z2;
+            iss >> x1 >> y1 >> z1 >> x2 >> y2 >> z2;
+            //std::cout << x << " " << y << " " << z << std::endl;
+
+            // add to map
+            to_fill->insert(glm::vec3(x1, y1, z1), glm::vec3(x2, y2, z2));
         }
 
         return true;
