@@ -12,6 +12,7 @@ out vec2 UV;
 uniform mat4 MVP;
 
 void main(){
+    gl_PointSize = 8.0f;
 
 	// Output position of the vertex, in clip space : MVP * position
 	gl_Position =  MVP * vec4(vertexPosition_modelspace,1);

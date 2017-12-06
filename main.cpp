@@ -15,11 +15,14 @@
 
 
 //static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = 1920/1.5;
+int SCREEN_WIDTH = 1920 / 2;
 //static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = 1080/1.5;
+int SCREEN_HEIGHT = 1080 / 2;
 
 bool VSYNC = false;
+
+bool capture_flag = false;
+bool show_points = false;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -30,8 +33,12 @@ bool VSYNC = false;
 GLuint LoadShaders(const char *, const char *);
 
 bool loadFile(const char *, std::vector<glm::vec3> *);
-bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fill);
+
+bool loadDomeMapFile(const char *filepath, std::vector<glm::vec3> *indexed_mask, std::vector<glm::vec3> *indexed_dome);
+
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
+
+GLuint loadBMP_custom(const char *);
 
 int main(void) {
 
@@ -84,6 +91,7 @@ int main(void) {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
+    glEnable(GL_PROGRAM_POINT_SIZE);
 
 
     glfwSwapInterval(0);
@@ -107,7 +115,7 @@ int main(void) {
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0, 0.0, 2.5), // Camera is at (4,3,3), in World Space
+            glm::vec3(0.0, 0.0, 3.5), // Camera is at (4,3,3), in World Space
             glm::vec3(0.0, 0.0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
@@ -130,75 +138,104 @@ int main(void) {
     float max_pos_x = 1.0f;
     float min_pos_y = -1.0f;
     float max_pos_y = 1.0f;
-    std::vector<glm::vec3> mask_vec, dome_point_vec;
-//    std::map<glm::vec3, glm::vec3> warp_map;
+    std::vector<glm::vec3> mask_vec, dome_vec, blue, red;
+    std::map<glm::vec3, glm::vec3> warp_map;
 
-//    loadDomeMapFile("../screen_to_dome.domemap", &warp_map);
-    bool foo = loadFile("../mask.txt", &mask_vec);
-    //bool bar = loadFile("../normalized_dome_plane_points.txt", &dome_point_vec);
-    std::cout << "Number of mask points: " << mask_vec.size() << std::endl;
-    //std::cout << "Number of dome plane points: " << dome_point_vec.size() << std::endl;
-    mask_vec.pop_back();
 
-//    std::cout << "show my points"<< std::endl;
-
-    for (int i = 0; i < mask_vec.size(); ++i){
-        std::cout << mask_vec[i].x << " " << mask_vec[i].y << std::endl;
+    bool a = loadDomeMapFile("../screen_to_dome.domemap", &mask_vec, &dome_vec);
+    //bool b = loadFile("../blue.txt", &blue);
+    //bool r = loadFile("../red.txt", &red);
+    
+    // map to dome grid to -1.0 to 1.0
+    for (int i = 0; i < mask_vec.size(); ++i) {
+        // std::cout << mask_vec[i].x << " " << mask_vec[i].y << std::endl;
         mask_vec[i].x = mapToRange(mask_vec[i].x, 0.0f, 1.0f, -1.0f, 1.0f);
         mask_vec[i].y = mapToRange(mask_vec[i].y, 0.0f, 1.0f, -1.0f, 1.0f);
-        mask_vec[i].z = 0.0f;
+
+//        mask_vec[i].z = 0.0f;
+    }
+
+    float min_val_x = 100;
+    float max_val_x = -100;
+    float min_val_y = 100;
+    float max_val_y = -100;
+    for (int i = 0; i < dome_vec.size(); ++i) {
+        if (dome_vec[i].x < min_val_x) {
+            min_val_x = dome_vec[i].x;
+        }
+        if (dome_vec[i].x > max_val_x) {
+            max_val_x = dome_vec[i].x;
+        }
+        if (dome_vec[i].z < min_val_y) {
+            min_val_y = dome_vec[i].z;
+        }
+        if (dome_vec[i].z > max_val_y) {
+            max_val_y = dome_vec[i].z;
+        }
+    }
+
+    std::cout << "min " << min_val_x << " " << min_val_y << " max " << max_pos_x << " " << max_pos_x << std::endl;
+
+    // map to dome grid to -1.0 to 1.0
+    for (int i = 0; i < dome_vec.size(); ++i) {
+        dome_vec[i].x = mapToRange(dome_vec[i].x, min_val_x, max_val_x, -1.0f, 1.0f);
+        dome_vec[i].y = mapToRange(dome_vec[i].z, min_val_y, max_val_y, -1.0f, 1.0f);
+        dome_vec[i].z = 1.0f;
     }
 
     std::vector<glm::vec3> mesh_vec;
     // create mesh
-    for (int idx = 0; idx < mask_vec.size() - col_size - 1; ++idx){
-        if (idx != col_size -1){
-            // triangle 1
-            mesh_vec.push_back(mask_vec[idx]);
-            mesh_vec.push_back(mask_vec[idx+1]);
-            mesh_vec.push_back(mask_vec[idx+col_size]);
-            // triangle 2
-            mesh_vec.push_back(mask_vec[idx+1]);
-            mesh_vec.push_back(mask_vec[idx+1+col_size]);
-            mesh_vec.push_back(mask_vec[idx+col_size]);
-            triangle_count += 2;
+    for (int idx = 0; idx < mask_vec.size() - col_size - 1; ++idx) {
+        if (idx != col_size - 1) {
+
+            if (mask_vec[idx].z == 0 && mask_vec[idx + 1].z == 0 && mask_vec[idx + col_size].z == 0 &&
+                mask_vec[idx + 1 + col_size].z == 0) {
+                // triangle 1
+                mesh_vec.push_back(mask_vec[idx]);
+                mesh_vec.push_back(mask_vec[idx + 1]);
+                mesh_vec.push_back(mask_vec[idx + col_size]);
+                // triangle 2
+                mesh_vec.push_back(mask_vec[idx + 1]);
+                mesh_vec.push_back(mask_vec[idx + 1 + col_size]);
+                mesh_vec.push_back(mask_vec[idx + col_size]);
+                triangle_count += 2;
+            } else // (mask_vec[idx].z == 1)
+            {
+                // triangle 1
+                mesh_vec.push_back(dome_vec[idx]);
+                mesh_vec.push_back(dome_vec[idx + 1]);
+                mesh_vec.push_back(dome_vec[idx + col_size]);
+                // triangle 2
+                mesh_vec.push_back(dome_vec[idx + 1]);
+                mesh_vec.push_back(dome_vec[idx + 1 + col_size]);
+                mesh_vec.push_back(dome_vec[idx + col_size]);
+                triangle_count += 2;
+            }
+
         }
     }
-    std::cout << "START quads"<< std::endl;
+    std::cout << "START quads" << std::endl;
 //
 //    for (int i = 0; i < mesh_vec.size(); ++i){
 //        std::cout << mesh_vec[i].x << " " << mesh_vec[i].y << " " << mesh_vec[i].z << std::endl;
 //    }
 
-    std::cout << "START texs"<< std::endl;
+    std::cout << "START texs" << std::endl;
     std::vector<glm::vec2> tex_vec;
 
-    for (int i = 0; i < mesh_vec.size(); ++i){
-        float u = mapToRange(mesh_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-        float v = mapToRange(mesh_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-        tex_vec.push_back(glm::vec2(u,v));
+    for (int i = 0; i < mesh_vec.size(); ++i) {
+        float u, v;
+        if (mask_vec[i].z > 0.0){
+//            u = mapToRange(dome_vec[i].x, min_val_x, max_val_x, 0.0f, 1.0f);
+//            v = mapToRange(dome_vec[i].z, min_val_y, max_val_y, 0.0f, 1.0f);
+            u = mapToRange(mask_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+            v = mapToRange(mask_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+        } else {
+            u = mapToRange(mesh_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+            v = mapToRange(mesh_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+        }
+        tex_vec.push_back(glm::vec2(u, v));
     }
-
-//    for (int i = 0; i < tex_vec.size(); ++i){
-//        std::cout << tex_vec[i].x << " " << tex_vec[i].y << std::endl;
-//    }
-
-
-//            -1.0f, -1.0f, 0.0f,
-//            -1.0f, 1.0f, 0.0f,
-//             1.0f, 1.0f, 0.0f,
-//            -1.0f, -1.0f, 0.0f,
-//             1.0f, -1.0f, 0.0f,
-//             1.0f, 1.0f, 0.0f,
-//
-//    static const GLfloat g_uv_buffer_data[] = {
-//            0.0f, 0.0f,
-//            0.0f, 1.0f,
-//            1.0f, 1.0f,
-//            0.0f, 0.0f,
-//            1.0f, 0.0f,
-//            1.0f, 1.0f,
-//    };
 
     std::cout << "Number of mesh points: " << mesh_vec.size() << std::endl;
     std::cout << "Number of tex points: " << tex_vec.size() << std::endl;
@@ -215,26 +252,31 @@ int main(void) {
     glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
     glBufferData(GL_ARRAY_BUFFER, tex_vec.size() * sizeof(glm::vec2), &tex_vec[0], GL_STATIC_DRAW);
 
-
-    // create texture from ximage
-    // get initial image
-    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-
-    // create and bind new texture
+    GLuint texture;
+    GLint texture_id;
     GLuint screen_texture;
-    glGenTextures(0, &screen_texture);
-    glBindTexture(GL_TEXTURE_2D, screen_texture);
+    GLint screen_texture_id;
+    if (!capture_flag) {
+        texture = loadBMP_custom("../tex.bmp");
+        texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+    } else if (capture_flag) {
+        // create texture from ximage
+        // get initial image
+        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
 
-    // specify 2D texture image
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+        // create and bind new texture
+        glGenTextures(0, &screen_texture);
+        glBindTexture(GL_TEXTURE_2D, screen_texture);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        // specify 2D texture image
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-    // get uniform texture location in fragment shader
-    GLint screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // get uniform texture location in fragment shader
+        screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+    }
 
     // main loop
     bool running = true;
@@ -257,10 +299,12 @@ int main(void) {
             last_time += 1.0;
         }
 
-        // get screenshot
-        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-        if (!image) {
-            printf("Unable to create image...\n");
+        if (capture_flag) {
+            // get screenshot
+            image = XGetImage(display, root_window, 100, 100, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+            if (!image) {
+                printf("Unable to create image...\n");
+            }
         }
 
         // use shader
@@ -273,9 +317,16 @@ int main(void) {
          * specify vertex arrays of vertices and uv's
          * draw finalyy
          */
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+        if (capture_flag) {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
+                            image->data);
 
-        glUniform1i(screen_texture_id, 0);
+            glUniform1i(screen_texture_id, 0);
+        } else if (!capture_flag) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glUniform1i(texture_id, 0);
+        }
 
         // specify vertex arrays of vertices and uv's
         glEnableVertexAttribArray(0);
@@ -301,6 +352,8 @@ int main(void) {
         );
 
 
+        //glDrawArrays(GL_POINTS, 0, triangle_count * 3);
+
         glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
 
         // draw
@@ -312,7 +365,9 @@ int main(void) {
         glfwPollEvents();
 
         // important otherwise memory will be full soon
-        XDestroyImage(image);
+        if (capture_flag) {
+            XDestroyImage(image);
+        }
 
         // check for keyboard input
         if (glfwGetKey(glfw_window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
@@ -378,14 +433,7 @@ bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
     }
 }
 
-/**
- * load file from harddisk
- * @param filepath
- */
-
-
-
-bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fill) {
+bool loadDomeMapFile(const char *filepath, std::vector<glm::vec3> *indexed_mask, std::vector<glm::vec3> *indexed_dome) {
 
     std::ifstream f;
     std::string s;
@@ -395,6 +443,7 @@ bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fil
     if (f.is_open()) {
 
         std::cout << "Loading file: '" << filepath << "'!" << std::endl;
+        int idx = 0;
         while (!f.eof()) {
 
             getline(f, s);
@@ -405,7 +454,9 @@ bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fil
             //std::cout << x << " " << y << " " << z << std::endl;
 
             // add to map
-            to_fill->insert(glm::vec3(x1, y1, z1), glm::vec3(x2, y2, z2));
+            indexed_mask->push_back(glm::vec3(x1, y1, z1));
+            indexed_dome->push_back(glm::vec3(x2, y2, z2));
+            idx++;
         }
 
         return true;
@@ -413,7 +464,6 @@ bool loadDomeMapFile(const char *filepath, std::map<glm::vec3,glm::vec3> *to_fil
         std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
         return false;
     }
-
 }
 
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max) {
@@ -514,6 +564,101 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
     glDeleteShader(FragmentShaderID);
 
     return ProgramID;
+}
+
+
+GLuint loadBMP_custom(const char *imagepath) {
+
+    printf("Reading image %s\n", imagepath);
+
+    // Data read from the header of the BMP file
+    unsigned char header[54];
+    unsigned int dataPos;
+    unsigned int imageSize;
+    unsigned int width, height;
+    // Actual RGB data
+    unsigned char *data;
+
+    // Open the file
+    FILE *file = fopen(imagepath, "rb");
+    if (!file) {
+        printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath);
+        getchar();
+        return 0;
+    }
+
+    // Read the header, i.e. the 54 first bytes
+
+    // If less than 54 bytes are read, problem
+    if (fread(header, 1, 54, file) != 54) {
+        printf("Not a correct BMP file\n");
+        fclose(file);
+        return 0;
+    }
+    // A BMP files always begins with "BM"
+    if (header[0] != 'B' || header[1] != 'M') {
+        printf("Not a correct BMP file\n");
+        fclose(file);
+        return 0;
+    }
+    // Make sure this is a 24bpp file
+    if (*(int *) &(header[0x1E]) != 0) {
+        printf("Not a correct BMP file\n");
+        fclose(file);
+        return 0;
+    }
+    if (*(int *) &(header[0x1C]) != 24) {
+        printf("Not a correct BMP file\n");
+        fclose(file);
+        return 0;
+    }
+
+    // Read the information about the image
+    dataPos = *(int *) &(header[0x0A]);
+    imageSize = *(int *) &(header[0x22]);
+    width = *(int *) &(header[0x12]);
+    height = *(int *) &(header[0x16]);
+
+    // Some BMP files are misformatted, guess missing information
+    if (imageSize == 0) imageSize = width * height * 3; // 3 : one byte for each Red, Green and Blue component
+    if (dataPos == 0) dataPos = 54; // The BMP header is done that way
+
+    // Create a buffer
+    data = new unsigned char[imageSize];
+
+    // Read the actual data from the file into the buffer
+    fread(data, 1, imageSize, file);
+
+    // Everything is in memory now, the file can be closed.
+    fclose(file);
+
+    // Create one OpenGL texture
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+
+    // "Bind" the newly created texture : all future texture functions will modify this texture
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    // Give the image to OpenGL
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+
+    // OpenGL has now copied the data. Free our own version
+    delete[] data;
+
+    // Poor filtering, or ...
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    // ... nice trilinear filtering ...
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // ... which requires mipmaps. Generate them automatically.
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Return the ID of the texture we just created
+    return textureID;
 }
 
 
