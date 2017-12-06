@@ -23,6 +23,7 @@ bool VSYNC = false;
 
 bool capture_flag = false;
 bool show_points = false;
+bool show_polys = true;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -92,6 +93,10 @@ int main(void) {
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
     glEnable(GL_PROGRAM_POINT_SIZE);
+    if (show_polys){
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
 
 
     glfwSwapInterval(0);
@@ -115,17 +120,18 @@ int main(void) {
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0, 0.0, 3.5), // Camera is at (4,3,3), in World Space
+            glm::vec3(0.0, 0.0, 3.0), // Camera is at (4,3,3), in World Space
             glm::vec3(0.0, 0.0, 0), // and looks at the origin
             glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
     // model
     glm::mat4 model = glm::mat4(1.0f);
-    glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
+    //glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
 
     // MVP
-    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
+//    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
+    glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
 
 
     /**
@@ -138,98 +144,168 @@ int main(void) {
     float max_pos_x = 1.0f;
     float min_pos_y = -1.0f;
     float max_pos_y = 1.0f;
-    std::vector<glm::vec3> mask_vec, dome_vec, blue, red;
+    std::vector<glm::vec3> blue, red;
     std::map<glm::vec3, glm::vec3> warp_map;
 
+    bool b = loadFile("../blue.txt", &blue);
+    bool r = loadFile("../red.txt", &red);
 
-    bool a = loadDomeMapFile("../screen_to_dome.domemap", &mask_vec, &dome_vec);
-    //bool b = loadFile("../blue.txt", &blue);
-    //bool r = loadFile("../red.txt", &red);
-    
-    // map to dome grid to -1.0 to 1.0
-    for (int i = 0; i < mask_vec.size(); ++i) {
-        // std::cout << mask_vec[i].x << " " << mask_vec[i].y << std::endl;
-        mask_vec[i].x = mapToRange(mask_vec[i].x, 0.0f, 1.0f, -1.0f, 1.0f);
-        mask_vec[i].y = mapToRange(mask_vec[i].y, 0.0f, 1.0f, -1.0f, 1.0f);
 
-//        mask_vec[i].z = 0.0f;
-    }
+    // get meta information about calculated
+    int circle_count = (int)blue.back().x;
+    int points_per_circle = (int)blue.back().y;
+    int point_count = (int)blue.back().z;
+
+    blue.pop_back();
+    blue.pop_back();
+    std::cout << "size: " << blue.size() << " read point count: " << point_count <<  std::endl;
+    //for (int i = 0; i < blue.size(); ++i) {
+        //std::cout << "x:" << blue[i].x << " y: " << blue[i].y << std::endl;
+    //}
 
     float min_val_x = 100;
     float max_val_x = -100;
     float min_val_y = 100;
     float max_val_y = -100;
-    for (int i = 0; i < dome_vec.size(); ++i) {
-        if (dome_vec[i].x < min_val_x) {
-            min_val_x = dome_vec[i].x;
+    for (int i = 0; i < blue.size(); ++i) {
+        if (blue[i].x < min_val_x) {
+            min_val_x = blue[i].x;
         }
-        if (dome_vec[i].x > max_val_x) {
-            max_val_x = dome_vec[i].x;
+        if (blue[i].x > max_val_x) {
+            max_val_x = blue[i].x;
         }
-        if (dome_vec[i].z < min_val_y) {
-            min_val_y = dome_vec[i].z;
+        if (blue[i].y < min_val_y) {
+            min_val_y = blue[i].y;
         }
-        if (dome_vec[i].z > max_val_y) {
-            max_val_y = dome_vec[i].z;
+        if (blue[i].y > max_val_y) {
+            max_val_y = blue[i].y;
         }
     }
-
-    std::cout << "min " << min_val_x << " " << min_val_y << " max " << max_pos_x << " " << max_pos_x << std::endl;
+    std::cout << "blue vector size:" << blue.size() << std::endl;
+    std::cout << " blue min values:" << min_val_x << " " << min_val_y << " - max  values" << max_pos_x << " "
+              << max_pos_x << std::endl;
 
     // map to dome grid to -1.0 to 1.0
-    for (int i = 0; i < dome_vec.size(); ++i) {
-        dome_vec[i].x = mapToRange(dome_vec[i].x, min_val_x, max_val_x, -1.0f, 1.0f);
-        dome_vec[i].y = mapToRange(dome_vec[i].z, min_val_y, max_val_y, -1.0f, 1.0f);
-        dome_vec[i].z = 1.0f;
+    for (int i = 0; i < blue.size(); ++i) {
+        blue[i].x = mapToRange(blue[i].x, min_val_x, max_val_x, -1.0f, 1.0f);
+        blue[i].y = mapToRange(blue[i].y, min_val_y, max_val_y, -1.0f, 1.0f);
+        //blue[i].z = 0.0f;
+    }
+
+    red.pop_back();
+    red.pop_back();
+    std::cout << "red size: " << red.size() << " read point count: " << point_count <<  std::endl;
+    float red_min_val_x = 100;
+    float red_max_val_x = -100;
+    float red_min_val_y = 100;
+    float red_max_val_y = -100;
+    for (int i = 0; i < red.size(); ++i) {
+        if (red[i].x < red_min_val_x) {
+            red_min_val_x = red[i].x;
+        }
+        if (red[i].x > red_max_val_x) {
+            red_max_val_x = red[i].x;
+        }
+        if (red[i].y < red_min_val_y) {
+            red_min_val_y = red[i].y;
+        }
+        if (red[i].y > red_max_val_y) {
+            red_max_val_y = red[i].y;
+        }
+    }
+    std::cout << "red vector size:" << red.size() << std::endl;
+    std::cout << " red min values:" << red_min_val_x << " " << red_min_val_y << " - max  values" << max_pos_x << " "
+              << max_pos_x << std::endl;
+
+    // map to dome grid to -1.0 to 1.0
+    for (int i = 0; i < red.size(); ++i) {
+        red[i].x = mapToRange(red[i].x, red_min_val_x, red_max_val_x, -1.0f, 1.0f);
+        red[i].y = mapToRange(red[i].y, red_min_val_y, red_max_val_y, -1.0f, 1.0f);
+        red[i].z = 0.0f;
     }
 
     std::vector<glm::vec3> mesh_vec;
     // create mesh
-    for (int idx = 0; idx < mask_vec.size() - col_size - 1; ++idx) {
-        if (idx != col_size - 1) {
-
-            if (mask_vec[idx].z == 0 && mask_vec[idx + 1].z == 0 && mask_vec[idx + col_size].z == 0 &&
-                mask_vec[idx + 1 + col_size].z == 0) {
-                // triangle 1
-                mesh_vec.push_back(mask_vec[idx]);
-                mesh_vec.push_back(mask_vec[idx + 1]);
-                mesh_vec.push_back(mask_vec[idx + col_size]);
-                // triangle 2
-                mesh_vec.push_back(mask_vec[idx + 1]);
-                mesh_vec.push_back(mask_vec[idx + 1 + col_size]);
-                mesh_vec.push_back(mask_vec[idx + col_size]);
-                triangle_count += 2;
-            } else // (mask_vec[idx].z == 1)
-            {
-                // triangle 1
-                mesh_vec.push_back(dome_vec[idx]);
-                mesh_vec.push_back(dome_vec[idx + 1]);
-                mesh_vec.push_back(dome_vec[idx + col_size]);
-                // triangle 2
-                mesh_vec.push_back(dome_vec[idx + 1]);
-                mesh_vec.push_back(dome_vec[idx + 1 + col_size]);
-                mesh_vec.push_back(dome_vec[idx + col_size]);
+    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
+        if (circle_idx == 0){
+            for (int t = 1; t < points_per_circle + 1; ++t){
+                // start triangles around center
+                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
+                int i1 = 0;
+                int i2 = t;
+                int i3 = 1 + (t % points_per_circle);
+                if (blue[i1].z == 1) {
+                    mesh_vec.push_back(blue[i1]);
+                } else{
+                    mesh_vec.push_back(red[i1]);
+                }
+                if (blue[i2].z == 1) {
+                    mesh_vec.push_back(blue[i2]);
+                } else{
+                    mesh_vec.push_back(red[i2]);
+                }
+                if (blue[i3].z == 1) {
+                    mesh_vec.push_back(blue[i3]);
+                } else{
+                    mesh_vec.push_back(red[i3]);
+                }
+                triangle_count += 1;
+            }
+        } else {
+            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
+            for (int idx = 0; idx < points_per_circle; ++idx){
+                int i1 = start_point + idx;
+                int i2 = start_point + idx + points_per_circle;
+                int i3 = start_point + (idx + 1) % points_per_circle;
+                // create quad
+                if (blue[i1].z == 1) {
+                    mesh_vec.push_back(blue[i1]);
+                } else{
+                    mesh_vec.push_back(red[i1]);
+                }
+                if (blue[i2].z == 1) {
+                    mesh_vec.push_back(blue[i2]);
+                } else{
+                    mesh_vec.push_back(red[i2]);
+                }
+                if (blue[i3].z == 1) {
+                    mesh_vec.push_back(blue[i3]);
+                } else{
+                    mesh_vec.push_back(red[i3]);
+                }
+                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
+                int i4 = start_point + (idx + 1) % points_per_circle;
+                int i5 = start_point + idx + points_per_circle;
+                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
+                if (blue[i4].z == 1) {
+                    mesh_vec.push_back(blue[i4]);
+                } else{
+                    mesh_vec.push_back(red[i4]);
+                }
+                if (blue[i5].z == 1) {
+                    mesh_vec.push_back(blue[i5]);
+                } else{
+                    mesh_vec.push_back(red[i5]);
+                }
+                if (blue[i6].z == 1) {
+                    mesh_vec.push_back(blue[i6]);
+                } else{
+                    mesh_vec.push_back(red[i6]);
+                }
+                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
                 triangle_count += 2;
             }
-
         }
     }
-    std::cout << "START quads" << std::endl;
-//
-//    for (int i = 0; i < mesh_vec.size(); ++i){
-//        std::cout << mesh_vec[i].x << " " << mesh_vec[i].y << " " << mesh_vec[i].z << std::endl;
-//    }
 
-    std::cout << "START texs" << std::endl;
     std::vector<glm::vec2> tex_vec;
-
     for (int i = 0; i < mesh_vec.size(); ++i) {
         float u, v;
-        if (mask_vec[i].z > 0.0){
+        if (blue[i].z > 0.0) {
 //            u = mapToRange(dome_vec[i].x, min_val_x, max_val_x, 0.0f, 1.0f);
 //            v = mapToRange(dome_vec[i].z, min_val_y, max_val_y, 0.0f, 1.0f);
-            u = mapToRange(mask_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-            v = mapToRange(mask_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+            u = mapToRange(blue[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+            v = mapToRange(blue[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
         } else {
             u = mapToRange(mesh_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
             v = mapToRange(mesh_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
@@ -351,10 +427,11 @@ int main(void) {
                 (void *) 0          // array buffer offset
         );
 
-
-        //glDrawArrays(GL_POINTS, 0, triangle_count * 3);
-
-        glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+        if (show_points) {
+            glDrawArrays(GL_POINTS, 0, triangle_count * 3);
+        } else if (!show_points) {
+            glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+        }
 
         // draw
         glDisableVertexAttribArray(0);
@@ -420,7 +497,7 @@ bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
 
             float x, y, z;
             iss >> x >> y >> z;
-            std::cout << x << " " << y << " " << z << std::endl;
+            // std::cout << x << " " << y << " " << z << std::endl;
 
             // append to input vector
             to_fill->push_back(glm::vec3(x, y, z));
