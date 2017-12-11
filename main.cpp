@@ -21,9 +21,9 @@ int SCREEN_HEIGHT = (int) 1080 / 2;
 
 bool VSYNC = false;
 
-bool capture_flag = false;
+bool capture_flag = true;
 bool show_points = false;
-bool show_polys = true;
+bool show_polys = false;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -141,38 +141,38 @@ int main(void) {
     float max_pos_x = 1.0f;
     float min_pos_y = -1.0f;
     float max_pos_y = 1.0f;
-    std::vector<glm::vec3> blue, red;
+    std::vector<glm::vec3> mesh, uv_coords;
     std::map<glm::vec3, glm::vec3> warp_map;
 
-    loadFile("../blue.txt", &blue);
-    loadFile("../red.txt", &red);
+    loadFile("../mesh.txt", &mesh);
 
-    //loadFile("../texture_coords.txt", &blue);
-    //loadFile("../mesh.txt", &red);
+    loadFile("../texture_coords.txt", &uv_coords);
 
     // get meta information about calculated
-    auto circle_count = (int) blue.back().x;
-    auto points_per_circle = (int) blue.back().y;
-    auto point_count = (int) blue.back().z;
+    auto circle_count = (int) mesh.back().x;
+    auto points_per_circle = (int) mesh.back().y;
+    auto point_count = (int) mesh.back().z;
     std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
 
-    blue.pop_back();
-    blue.pop_back();
-    mapVecToRange(&blue);
-    std::cout << "blue size: " << blue.size() << " read point count: " << point_count << std::endl;
-    if (blue.size() != point_count) {
+    mesh.pop_back();
+    mesh.pop_back();
+    // mapVecToRange(&mesh);
+    std::cout << "blue size: " << mesh.size() << " read point count: " << point_count << std::endl;
+    if (mesh.size() != point_count) {
         std::cout << "Warp points do not match" << std::endl;
         return -1;
     }
 
-    red.pop_back();
-    red.pop_back();
-    std::cout << "red size: " << red.size() << " read point count: " << point_count << std::endl;
-    mapVecToRange(&red);
+    uv_coords.pop_back();
+    uv_coords.pop_back();
+    std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
+    //mapVecToRange(&red);
 
-    for (int i = 0; i < red.size(); ++i) {
-        red[i].y = red[i].z;
-        red[i].z = 0;
+    for (int i = 0; i < mesh.size(); ++i) {
+        mesh[i].y = mesh[i].z;
+        mesh[i].z = 0.0f;
+        uv_coords[i].y = uv_coords[i].z;
+        uv_coords[i].z = 0.0f;
         //blue[i].y = blue[i].z;
         //blue[i].z = 1.0f;
         //blue[i].z = 0.0f;
@@ -208,21 +208,9 @@ int main(void) {
                 int i1 = 0;
                 int i2 = t;
                 int i3 = 1 + (t % points_per_circle);
-                if (blue[i1].z == 0.0) {
-                    mesh_vec.push_back(blue[i1]);
-                } else {
-                    mesh_vec.push_back(red[i1]);
-                }
-                if (blue[i2].z == 0.0) {
-                    mesh_vec.push_back(blue[i2]);
-                } else {
-                    mesh_vec.push_back(red[i2]);
-                }
-                if (blue[i3].z == 0.0) {
-                    mesh_vec.push_back(blue[i3]);
-                } else {
-                    mesh_vec.push_back(red[i3]);
-                }
+                mesh_vec.push_back(mesh[i1]);
+                mesh_vec.push_back(mesh[i2]);
+                mesh_vec.push_back(mesh[i3]);
                 triangle_count += 1;
             }
         } else {
@@ -231,41 +219,16 @@ int main(void) {
                 int i1 = start_point + idx;
                 int i2 = start_point + idx + points_per_circle;
                 int i3 = start_point + (idx + 1) % points_per_circle;
-                // create quad
-                if (blue[i1].z == 0.0) {
-                    mesh_vec.push_back(blue[i1]);
-                } else {
-                    mesh_vec.push_back(red[i1]);
-                }
-                if (blue[i2].z == 0.0) {
-                    mesh_vec.push_back(blue[i2]);
-                } else {
-                    mesh_vec.push_back(red[i2]);
-                }
-                if (blue[i3].z == 0.0) {
-                    mesh_vec.push_back(blue[i3]);
-                } else {
-                    mesh_vec.push_back(red[i3]);
-                }
+                mesh_vec.push_back(mesh[i1]);
+                mesh_vec.push_back(mesh[i2]);
+                mesh_vec.push_back(mesh[i3]);
                 //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
                 int i4 = start_point + (idx + 1) % points_per_circle;
                 int i5 = start_point + idx + points_per_circle;
                 int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
-                if (blue[i4].z == 0.0) {
-                    mesh_vec.push_back(blue[i4]);
-                } else {
-                    mesh_vec.push_back(red[i4]);
-                }
-                if (blue[i5].z == 0.0) {
-                    mesh_vec.push_back(blue[i5]);
-                } else {
-                    mesh_vec.push_back(red[i5]);
-                }
-                if (blue[i6].z == 0.0) {
-                    mesh_vec.push_back(blue[i6]);
-                } else {
-                    mesh_vec.push_back(red[i6]);
-                }
+                mesh_vec.push_back(mesh[i4]);
+                mesh_vec.push_back(mesh[i5]);
+                mesh_vec.push_back(mesh[i6]);
                 //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
                 triangle_count += 2;
             }
@@ -281,34 +244,19 @@ int main(void) {
                 int i1 = 0;
                 int i2 = t;
                 int i3 = 1 + (t % points_per_circle);
-                if (blue[i1].z != 0.0) {
-                    float u = mapToRange(blue[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i2].z != 0.0) {
-                    float u = mapToRange(blue[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i3].z != 0.0) {
-                    float u = mapToRange(blue[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                triangle_count += 1;
+
+                //float u = mapToRange(uv_coords[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                float u = uv_coords[i1].x;
+                float v = uv_coords[i1].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i2].x;
+                v = uv_coords[i2].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i3].x;
+                v = uv_coords[i3].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
             }
         } else {
             int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
@@ -316,67 +264,34 @@ int main(void) {
                 int i1 = start_point + idx;
                 int i2 = start_point + idx + points_per_circle;
                 int i3 = start_point + (idx + 1) % points_per_circle;
-                // create quad
-                if (blue[i1].z != 0.0) {
-                    float u = mapToRange(blue[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i2].z != 0.0) {
-                    float u = mapToRange(blue[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i3].z != 0.0) {
-                    float u = mapToRange(blue[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
+                float u = uv_coords[i1].x;
+                float v = uv_coords[i1].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i2].x;
+                v = uv_coords[i2].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i3].x;
+                v = uv_coords[i3].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
                 //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
                 int i4 = start_point + (idx + 1) % points_per_circle;
                 int i5 = start_point + idx + points_per_circle;
                 int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
-                if (blue[i4].z != 0.0) {
-                    float u = mapToRange(blue[i4].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i4].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i4].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i4].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i5].z != 0.0) {
-                    float u = mapToRange(blue[i5].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i5].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i5].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i5].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
-                if (blue[i6].z != 0.0) {
-                    float u = mapToRange(blue[i6].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = mapToRange(blue[i6].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                } else {
-                    float u = 1.0f; //mapToRange(red[i6].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                    float v = 1.0f; //mapToRange(red[i6].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
-                    tex_vec.emplace_back(glm::vec2(u, v));
-                }
+                u = uv_coords[i4].x;
+                v = uv_coords[i4].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i5].x;
+                v = uv_coords[i5].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i6].x;
+                v = uv_coords[i6].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
                 //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
-                triangle_count += 2;
             }
         }
     }
@@ -400,8 +315,8 @@ int main(void) {
     GLuint screen_texture;
     GLint screen_texture_id;
     if (!capture_flag) {
-        // texture = loadBMP_custom("../dome_coords.bmp");
-        texture = loadBMP_custom("../polar.bmp");
+        texture = loadBMP_custom("../dome_coords.bmp");
+        //texture = loadBMP_custom("../polar.bmp");
         // texture = loadBMP_custom("../game_scene.bmp");
         //texture = loadBMP_custom("../tex.bmp");
         //texture = loadBMP_custom("../gradient2.bmp");
