@@ -12,12 +12,12 @@
 // X11
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
-
+//hello this is warped text
 
 //static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = 1920 / 2;
+int SCREEN_WIDTH = (int) 1920 / 2;
 //static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = 1080 / 2;
+int SCREEN_HEIGHT = (int) 1080 / 2;
 
 bool VSYNC = false;
 
@@ -38,6 +38,8 @@ bool loadFile(const char *, std::vector<glm::vec3> *);
 bool loadDomeMapFile(const char *filepath, std::vector<glm::vec3> *indexed_mask, std::vector<glm::vec3> *indexed_dome);
 
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
+
+void mapVecToRange(std::vector<glm::vec3> *vec);
 
 GLuint loadBMP_custom(const char *);
 
@@ -71,9 +73,9 @@ int main(void) {
     int height = mode->height;
 
 //    SCREEN_HEIGHT = height;
-//    SCREEN_WIDTH = widthg
+//    SCREEN_WIDTH = width;
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
-    if (glfw_window == NULL) {
+    if (glfw_window == nullptr) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
         return -1;
@@ -87,17 +89,17 @@ int main(void) {
         return -1;
     }
 
-    // stuff
+    // init GL settings
     glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glEnable(GL_DEPTH_TEST); // enable depth test
     glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
     glEnable(GL_PROGRAM_POINT_SIZE);
-    if (show_polys){
+
+    // set show polys flag to show vertice grid
+    if (show_polys) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
-
-
 
     glfwSwapInterval(0);
     if (VSYNC) {
@@ -127,18 +129,13 @@ int main(void) {
 
     // model
     glm::mat4 model = glm::mat4(1.0f);
-    //glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
+    glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
 
     // MVP
-//    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
+    //glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
     glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
 
 
-    /**
-     * object data
-     */
-    int row_size = 18;
-    int col_size = 32;
     int triangle_count = 0;
     float min_pos_x = -1.0f;
     float max_pos_x = 1.0f;
@@ -147,149 +144,126 @@ int main(void) {
     std::vector<glm::vec3> blue, red;
     std::map<glm::vec3, glm::vec3> warp_map;
 
-    bool b = loadFile("../blue.txt", &blue);
-    bool r = loadFile("../red.txt", &red);
+    loadFile("../blue.txt", &blue);
+    loadFile("../red.txt", &red);
 
+    //loadFile("../texture_coords.txt", &blue);
+    //loadFile("../mesh.txt", &red);
 
     // get meta information about calculated
-    int circle_count = (int)blue.back().x;
-    int points_per_circle = (int)blue.back().y;
-    int point_count = (int)blue.back().z;
+    auto circle_count = (int) blue.back().x;
+    auto points_per_circle = (int) blue.back().y;
+    auto point_count = (int) blue.back().z;
+    std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
 
     blue.pop_back();
     blue.pop_back();
-    std::cout << "size: " << blue.size() << " read point count: " << point_count <<  std::endl;
-    //for (int i = 0; i < blue.size(); ++i) {
-        //std::cout << "x:" << blue[i].x << " y: " << blue[i].y << std::endl;
-    //}
-
-    float min_val_x = 100;
-    float max_val_x = -100;
-    float min_val_y = 100;
-    float max_val_y = -100;
-    for (int i = 0; i < blue.size(); ++i) {
-        if (blue[i].x < min_val_x) {
-            min_val_x = blue[i].x;
-        }
-        if (blue[i].x > max_val_x) {
-            max_val_x = blue[i].x;
-        }
-        if (blue[i].y < min_val_y) {
-            min_val_y = blue[i].y;
-        }
-        if (blue[i].y > max_val_y) {
-            max_val_y = blue[i].y;
-        }
+    mapVecToRange(&blue);
+    std::cout << "blue size: " << blue.size() << " read point count: " << point_count << std::endl;
+    if (blue.size() != point_count) {
+        std::cout << "Warp points do not match" << std::endl;
+        return -1;
     }
-    std::cout << "blue vector size:" << blue.size() << std::endl;
-    std::cout << " blue min values:" << min_val_x << " " << min_val_y << " - max  values" << max_pos_x << " "
-              << max_pos_x << std::endl;
 
-    // map to dome grid to -1.0 to 1.0
-    for (int i = 0; i < blue.size(); ++i) {
-        blue[i].x = mapToRange(blue[i].x, min_val_x, max_val_x, -1.0f, 1.0f);
-        blue[i].y = mapToRange(blue[i].y, min_val_y, max_val_y, -1.0f, 1.0f);
+    red.pop_back();
+    red.pop_back();
+    std::cout << "red size: " << red.size() << " read point count: " << point_count << std::endl;
+    mapVecToRange(&red);
+
+    for (int i = 0; i < red.size(); ++i) {
+        red[i].y = red[i].z;
+        red[i].z = 0;
+        //blue[i].y = blue[i].z;
+        //blue[i].z = 1.0f;
         //blue[i].z = 0.0f;
+
     }
 
-    red.pop_back();
-    red.pop_back();
-    std::cout << "red size: " << red.size() << " read point count: " << point_count <<  std::endl;
-    float red_min_val_x = 100;
-    float red_max_val_x = -100;
-    float red_min_val_y = 100;
-    float red_max_val_y = -100;
-    for (int i = 0; i < red.size(); ++i) {
-        if (red[i].x < red_min_val_x) {
-            red_min_val_x = red[i].x;
-        }
-        if (red[i].x > red_max_val_x) {
-            red_max_val_x = red[i].x;
-        }
-        if (red[i].y < red_min_val_y) {
-            red_min_val_y = red[i].y;
-        }
-        if (red[i].y > red_max_val_y) {
-            red_max_val_y = red[i].y;
-        }
-    }
-    std::cout << "red vector size:" << red.size() << std::endl;
-    std::cout << " red min values:" << red_min_val_x << " " << red_min_val_y << " - max  values" << max_pos_x << " "
-              << max_pos_x << std::endl;
-
-    // map to dome grid to -1.0 to 1.0
-    for (int i = 0; i < red.size(); ++i) {
-        red[i].x = mapToRange(red[i].x, red_min_val_x, red_max_val_x, -1.0f, 1.0f);
-        red[i].y = mapToRange(red[i].y, red_min_val_y, red_max_val_y, -1.0f, 1.0f);
-        red[i].z = 0.0f;
-    }
+    // discard rings with no hit
+//    for (int circle_idx = 1; circle_idx < circle_count; ++circle_idx) {
+//        int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
+//        bool has_hit = false;
+//        for (int idx = 0; idx < points_per_circle; ++idx) {
+//            if (blue[start_point + idx].z == 1.0) {
+//                has_hit = true;
+//            }
+//        }
+//        if (!has_hit) {
+//            std::cout << "points to keep:" << (circle_idx - 1) * points_per_circle + 1 << std::endl;
+//            blue.resize((circle_idx - 1) * points_per_circle + 1);
+//            red.resize((circle_idx - 1) * points_per_circle + 1);
+//            point_count = (circle_idx - 1) * points_per_circle + 1;
+//            circle_count = circle_idx - 1;
+//            break;
+//        }
+//    }
 
     std::vector<glm::vec3> mesh_vec;
     // create mesh
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
-        if (circle_idx == 0){
-            for (int t = 1; t < points_per_circle + 1; ++t){
+        if (circle_idx == 0) {
+            for (int t = 1; t < points_per_circle + 1; ++t) {
                 // start triangles around center
                 //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
                 int i1 = 0;
                 int i2 = t;
                 int i3 = 1 + (t % points_per_circle);
-                if (blue[i1].z == 1) {
+                if (blue[i1].z == 0.0) {
                     mesh_vec.push_back(blue[i1]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i1]);
                 }
-                if (blue[i2].z == 1) {
+                if (blue[i2].z == 0.0) {
                     mesh_vec.push_back(blue[i2]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i2]);
                 }
-                if (blue[i3].z == 1) {
+                if (blue[i3].z == 0.0) {
                     mesh_vec.push_back(blue[i3]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i3]);
                 }
                 triangle_count += 1;
             }
         } else {
             int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
-            for (int idx = 0; idx < points_per_circle; ++idx){
+            for (int idx = 0; idx < points_per_circle; ++idx) {
                 int i1 = start_point + idx;
                 int i2 = start_point + idx + points_per_circle;
                 int i3 = start_point + (idx + 1) % points_per_circle;
                 // create quad
-                if (blue[i1].z == 1) {
+                if (blue[i1].z == 0.0) {
                     mesh_vec.push_back(blue[i1]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i1]);
                 }
-                if (blue[i2].z == 1) {
+                if (blue[i2].z == 0.0) {
                     mesh_vec.push_back(blue[i2]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i2]);
                 }
-                if (blue[i3].z == 1) {
+                if (blue[i3].z == 0.0) {
                     mesh_vec.push_back(blue[i3]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i3]);
                 }
                 //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
                 int i4 = start_point + (idx + 1) % points_per_circle;
                 int i5 = start_point + idx + points_per_circle;
                 int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
-                if (blue[i4].z == 1) {
+                if (blue[i4].z == 0.0) {
                     mesh_vec.push_back(blue[i4]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i4]);
                 }
-                if (blue[i5].z == 1) {
+                if (blue[i5].z == 0.0) {
                     mesh_vec.push_back(blue[i5]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i5]);
                 }
-                if (blue[i6].z == 1) {
+                if (blue[i6].z == 0.0) {
                     mesh_vec.push_back(blue[i6]);
-                } else{
+                } else {
                     mesh_vec.push_back(red[i6]);
                 }
                 //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
@@ -299,23 +273,116 @@ int main(void) {
     }
 
     std::vector<glm::vec2> tex_vec;
-    for (int i = 0; i < mesh_vec.size(); ++i) {
-        float u, v;
-        if (blue[i].z > 0.0) {
-//            u = mapToRange(dome_vec[i].x, min_val_x, max_val_x, 0.0f, 1.0f);
-//            v = mapToRange(dome_vec[i].z, min_val_y, max_val_y, 0.0f, 1.0f);
-            u = mapToRange(blue[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-            v = mapToRange(blue[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
+        if (circle_idx == 0) {
+            for (int t = 1; t < points_per_circle + 1; ++t) {
+                // start triangles around center
+                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
+                int i1 = 0;
+                int i2 = t;
+                int i3 = 1 + (t % points_per_circle);
+                if (blue[i1].z != 0.0) {
+                    float u = mapToRange(blue[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i2].z != 0.0) {
+                    float u = mapToRange(blue[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i3].z != 0.0) {
+                    float u = mapToRange(blue[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                triangle_count += 1;
+            }
         } else {
-            u = mapToRange(mesh_vec[i].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-            v = mapToRange(mesh_vec[i].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
+            for (int idx = 0; idx < points_per_circle; ++idx) {
+                int i1 = start_point + idx;
+                int i2 = start_point + idx + points_per_circle;
+                int i3 = start_point + (idx + 1) % points_per_circle;
+                // create quad
+                if (blue[i1].z != 0.0) {
+                    float u = mapToRange(blue[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i1].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i2].z != 0.0) {
+                    float u = mapToRange(blue[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i2].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i2].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i3].z != 0.0) {
+                    float u = mapToRange(blue[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i3].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i3].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
+                int i4 = start_point + (idx + 1) % points_per_circle;
+                int i5 = start_point + idx + points_per_circle;
+                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
+                if (blue[i4].z != 0.0) {
+                    float u = mapToRange(blue[i4].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i4].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i4].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i4].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i5].z != 0.0) {
+                    float u = mapToRange(blue[i5].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i5].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i5].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i5].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                if (blue[i6].z != 0.0) {
+                    float u = mapToRange(blue[i6].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = mapToRange(blue[i6].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                } else {
+                    float u = 1.0f; //mapToRange(red[i6].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                    float v = 1.0f; //mapToRange(red[i6].y, min_pos_y, max_pos_y, 0.0f, 1.0f);
+                    tex_vec.emplace_back(glm::vec2(u, v));
+                }
+                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
+                triangle_count += 2;
+            }
         }
-        tex_vec.push_back(glm::vec2(u, v));
     }
 
     std::cout << "Number of mesh points: " << mesh_vec.size() << std::endl;
     std::cout << "Number of tex points: " << tex_vec.size() << std::endl;
-
 
     // create buffers
     GLuint vertexbuffer;
@@ -333,7 +400,11 @@ int main(void) {
     GLuint screen_texture;
     GLint screen_texture_id;
     if (!capture_flag) {
-        texture = loadBMP_custom("../tex.bmp");
+        // texture = loadBMP_custom("../dome_coords.bmp");
+        texture = loadBMP_custom("../polar.bmp");
+        // texture = loadBMP_custom("../game_scene.bmp");
+        //texture = loadBMP_custom("../tex.bmp");
+        //texture = loadBMP_custom("../gradient2.bmp");
         texture_id = glGetUniformLocation(program_id, "myTextureSampler");
     } else if (capture_flag) {
         // create texture from ximage
@@ -377,7 +448,7 @@ int main(void) {
 
         if (capture_flag) {
             // get screenshot
-            image = XGetImage(display, root_window, 100, 100, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+            image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
             if (!image) {
                 printf("Unable to create image...\n");
             }
@@ -396,7 +467,6 @@ int main(void) {
         if (capture_flag) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
                             image->data);
-
             glUniform1i(screen_texture_id, 0);
         } else if (!capture_flag) {
             glActiveTexture(GL_TEXTURE0);
@@ -547,6 +617,35 @@ float mapToRange(float value, float in_min, float in_max, float out_min, float o
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+void mapVecToRange(std::vector<glm::vec3> *vec) {
+    float min_val_x = 999999;
+    float max_val_x = -999999;
+    float min_val_y = 999999;
+    float max_val_y = -999999;
+    for (auto item : *vec) {
+        if (item.x < min_val_x) {
+            min_val_x = item.x;
+        }
+        if (item.x > max_val_x && item.x < 1000.0f) {
+            max_val_x = item.x;
+        }
+        if (item.y < min_val_y) {
+            min_val_y = item.y;
+        }
+        if (item.y > max_val_y) {
+            max_val_y = item.y;
+        }
+    }
+
+    // map to dome grid to -1.0 to 1.0
+    for (int i = 0; i < vec->size(); ++i) {
+        float x, y, z;
+        x = mapToRange(vec->at(i).x, min_val_x, max_val_x, -1.0f, 1.0f);
+        y = mapToRange(vec->at(i).y, min_val_y, max_val_y, -1.0f, 1.0f);
+        vec->at(i) = glm::vec3(x, y, vec->at(i).z);
+    }
+
+}
 
 GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path) {
 
@@ -598,8 +697,6 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
         printf("%s\n", &VertexShaderErrorMessage[0]);
     }
 
-
-
     // Compile Fragment Shader
     printf("Compiling shader : %s\n", fragment_file_path);
     char const *FragmentSourcePointer = FragmentShaderCode.c_str();
@@ -614,8 +711,6 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
         glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, &FragmentShaderErrorMessage[0]);
         printf("%s\n", &FragmentShaderErrorMessage[0]);
     }
-
-
 
     // Link the program
     printf("Linking program\n");
