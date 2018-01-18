@@ -15,15 +15,15 @@
 //hello this is warped text
 
 //static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = (int) 1920 / 2;
+int SCREEN_WIDTH = (int) 1920;
 //static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = (int) 1080 / 2;
+int SCREEN_HEIGHT = (int) 1080;
 
 bool VSYNC = false;
 
-bool capture_flag = true;
+bool capture_flag = false;
 bool show_points = false;
-bool show_polys = false;
+bool show_polys = true;
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -35,24 +35,26 @@ GLuint LoadShaders(const char *, const char *);
 
 bool loadFile(const char *, std::vector<glm::vec3> *);
 
-bool loadDomeMapFile(const char *filepath, std::vector<glm::vec3> *indexed_mask, std::vector<glm::vec3> *indexed_dome);
+GLuint setup_vertices(const char *filepath, int *triangle_count);
+GLuint setup_tex_coords(const char *filepath);
 
-float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
-
-void mapVecToRange(std::vector<glm::vec3> *vec);
+GLuint init_static_texture();
+GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
 
 GLuint loadBMP_custom(const char *);
+float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
+void mapVecToRange(std::vector<glm::vec3> *vec);
 
 int main(void) {
 
     //get x11 client reference
     Display *display;
-    display = XOpenDisplay(NULL);
+    display = XOpenDisplay(nullptr);
     Window root_window;
     root_window = DefaultRootWindow(display);
 
     // declare image pointer
-    XImage *image; // test = XCreateImage( );
+    XImage *image;
 
     // Initialise GLFW
     GLFWwindow *glfw_window;
@@ -74,7 +76,7 @@ int main(void) {
 
 //    SCREEN_HEIGHT = height;
 //    SCREEN_WIDTH = width;
-    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", NULL, NULL);
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
     if (glfw_window == nullptr) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
         glfwTerminate();
@@ -132,325 +134,157 @@ int main(void) {
     glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
 
     // MVP
-    //glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
-    glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
-
+    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
+    //glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
 
     int triangle_count = 0;
-    float min_pos_x = -1.0f;
-    float max_pos_x = 1.0f;
-    float min_pos_y = -1.0f;
-    float max_pos_y = 1.0f;
-    std::vector<glm::vec3> mesh, uv_coords;
-    std::map<glm::vec3, glm::vec3> warp_map;
 
-    loadFile("../mesh.txt", &mesh);
+    GLuint vtx_buffer = setup_vertices("../screen_points_3.txt", &triangle_count);
+    std::cout << "TRIANGLE COUNT: " << triangle_count << std::endl;
 
-    loadFile("../texture_coords.txt", &uv_coords);
+    GLuint tex_buffer = setup_tex_coords("../texture_coords_3.txt");
 
-    // get meta information about calculated
-    auto circle_count = (int) mesh.back().x;
-    auto points_per_circle = (int) mesh.back().y;
-    auto point_count = (int) mesh.back().z;
-    std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
-
-    mesh.pop_back();
-    mesh.pop_back();
-    // mapVecToRange(&mesh);
-    std::cout << "blue size: " << mesh.size() << " read point count: " << point_count << std::endl;
-    if (mesh.size() != point_count) {
-        std::cout << "Warp points do not match" << std::endl;
-        return -1;
-    }
-
-    uv_coords.pop_back();
-    uv_coords.pop_back();
-    std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
-    //mapVecToRange(&red);
-
-    for (int i = 0; i < mesh.size(); ++i) {
-        mesh[i].y = mesh[i].z;
-        mesh[i].z = 0.0f;
-        uv_coords[i].y = uv_coords[i].z;
-        uv_coords[i].z = 0.0f;
-        //blue[i].y = blue[i].z;
-        //blue[i].z = 1.0f;
-        //blue[i].z = 0.0f;
-
-    }
-
-    // discard rings with no hit
-//    for (int circle_idx = 1; circle_idx < circle_count; ++circle_idx) {
-//        int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
-//        bool has_hit = false;
-//        for (int idx = 0; idx < points_per_circle; ++idx) {
-//            if (blue[start_point + idx].z == 1.0) {
-//                has_hit = true;
-//            }
-//        }
-//        if (!has_hit) {
-//            std::cout << "points to keep:" << (circle_idx - 1) * points_per_circle + 1 << std::endl;
-//            blue.resize((circle_idx - 1) * points_per_circle + 1);
-//            red.resize((circle_idx - 1) * points_per_circle + 1);
-//            point_count = (circle_idx - 1) * points_per_circle + 1;
-//            circle_count = circle_idx - 1;
-//            break;
-//        }
-//    }
-
-    std::vector<glm::vec3> mesh_vec;
-    // create mesh
-    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
-        if (circle_idx == 0) {
-            for (int t = 1; t < points_per_circle + 1; ++t) {
-                // start triangles around center
-                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
-                int i1 = 0;
-                int i2 = t;
-                int i3 = 1 + (t % points_per_circle);
-                mesh_vec.push_back(mesh[i1]);
-                mesh_vec.push_back(mesh[i2]);
-                mesh_vec.push_back(mesh[i3]);
-                triangle_count += 1;
-            }
-        } else {
-            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
-            for (int idx = 0; idx < points_per_circle; ++idx) {
-                int i1 = start_point + idx;
-                int i2 = start_point + idx + points_per_circle;
-                int i3 = start_point + (idx + 1) % points_per_circle;
-                mesh_vec.push_back(mesh[i1]);
-                mesh_vec.push_back(mesh[i2]);
-                mesh_vec.push_back(mesh[i3]);
-                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
-                int i4 = start_point + (idx + 1) % points_per_circle;
-                int i5 = start_point + idx + points_per_circle;
-                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
-                mesh_vec.push_back(mesh[i4]);
-                mesh_vec.push_back(mesh[i5]);
-                mesh_vec.push_back(mesh[i6]);
-                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
-                triangle_count += 2;
-            }
-        }
-    }
-
-    std::vector<glm::vec2> tex_vec;
-    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
-        if (circle_idx == 0) {
-            for (int t = 1; t < points_per_circle + 1; ++t) {
-                // start triangles around center
-                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
-                int i1 = 0;
-                int i2 = t;
-                int i3 = 1 + (t % points_per_circle);
-
-                //float u = mapToRange(uv_coords[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
-                float u = uv_coords[i1].x;
-                float v = uv_coords[i1].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i2].x;
-                v = uv_coords[i2].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i3].x;
-                v = uv_coords[i3].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-            }
-        } else {
-            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
-            for (int idx = 0; idx < points_per_circle; ++idx) {
-                int i1 = start_point + idx;
-                int i2 = start_point + idx + points_per_circle;
-                int i3 = start_point + (idx + 1) % points_per_circle;
-                float u = uv_coords[i1].x;
-                float v = uv_coords[i1].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i2].x;
-                v = uv_coords[i2].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i3].x;
-                v = uv_coords[i3].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
-                int i4 = start_point + (idx + 1) % points_per_circle;
-                int i5 = start_point + idx + points_per_circle;
-                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
-                u = uv_coords[i4].x;
-                v = uv_coords[i4].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i5].x;
-                v = uv_coords[i5].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-
-                u = uv_coords[i6].x;
-                v = uv_coords[i6].y;
-                tex_vec.emplace_back(glm::vec2(u, v));
-                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
-            }
-        }
-    }
-
-    std::cout << "Number of mesh points: " << mesh_vec.size() << std::endl;
-    std::cout << "Number of tex points: " << tex_vec.size() << std::endl;
-
-    // create buffers
-    GLuint vertexbuffer;
-    glGenBuffers(1, &vertexbuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glBufferData(GL_ARRAY_BUFFER, mesh_vec.size() * sizeof(glm::vec3), &mesh_vec[0], GL_STATIC_DRAW);
-
-    GLuint uvbuffer;
-    glGenBuffers(1, &uvbuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-    glBufferData(GL_ARRAY_BUFFER, tex_vec.size() * sizeof(glm::vec2), &tex_vec[0], GL_STATIC_DRAW);
-
-    GLuint texture;
-    GLint texture_id;
-    GLuint screen_texture;
-    GLint screen_texture_id;
+    GLuint tex;
+    GLint tex_id;
     if (!capture_flag) {
-        texture = loadBMP_custom("../dome_coords.bmp");
-        //texture = loadBMP_custom("../polar.bmp");
-        // texture = loadBMP_custom("../game_scene.bmp");
-        //texture = loadBMP_custom("../tex.bmp");
-        //texture = loadBMP_custom("../gradient2.bmp");
-        texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+        tex = init_static_texture();
+        tex_id = glGetUniformLocation(program_id, "myTextureSampler");
     } else if (capture_flag) {
-        // create texture from ximage
-        // get initial image
-        image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-
-        // create and bind new texture
-        glGenTextures(0, &screen_texture);
-        glBindTexture(GL_TEXTURE_2D, screen_texture);
-
-        // specify 2D texture image
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        // get uniform texture location in fragment shader
-        screen_texture_id = glGetUniformLocation(program_id, "myTextureSampler");
+        tex = init_dynamic_texture(display, root_window, image);
+        tex_id = glGetUniformLocation(program_id, "myTextureSampler");
     }
 
     // main loop
     bool running = true;
+    bool paused = false;
+    bool reload= false;
     double last_time = glfwGetTime();
     int num_frames = 0;
     while (running && glfwWindowShouldClose(glfw_window) == 0) {
 
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!paused) {
+            /**
+             * print render time per frame
+             */
+            // print ms per frame
+            ++num_frames;
+            double current_time = glfwGetTime();
+            if (current_time - last_time >= 1.0) {
+                std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
+                num_frames = 0;
+                last_time += 1.0;
+            }
 
-        /**
-         * print render time per frame
-         */
-        // print ms per frame
-        ++num_frames;
-        double current_time = glfwGetTime();
-        if (current_time - last_time >= 1.0) {
-            std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
-            num_frames = 0;
-            last_time += 1.0;
-        }
+            if (capture_flag) {
+                // get screenshot
+                image = XGetImage(display, root_window, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+                //image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+                if (!image) {
+                    printf("Unable to create image...\n");
+                }
+            }
 
-        if (capture_flag) {
-            // get screenshot
-            image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-            if (!image) {
-                printf("Unable to create image...\n");
+            // use shader
+            glUseProgram(program_id);
+
+            // send transformations to shader
+            glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
+
+            /**
+             * specify vertex arrays of vertices and uv's
+             * draw finalyy
+             */
+            if (capture_flag) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
+                                image->data);
+                //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
+                //                image->data);
+                glUniform1i(tex_id, 0);
+            } else if (!capture_flag) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, tex);
+                glUniform1i(tex_id, 0);
+            }
+
+            // specify vertex arrays of vertices and uv's
+            glEnableVertexAttribArray(0);
+            glBindBuffer(GL_ARRAY_BUFFER, vtx_buffer);
+            glVertexAttribPointer(
+                    0,                  // must match shader layout
+                    3,                  // size
+                    GL_FLOAT,           // type
+                    GL_FALSE,           // normalized?
+                    0,                  // stride
+                    (void *) 0          // array buffer offset
+            );
+
+            glEnableVertexAttribArray(1);
+            glBindBuffer(GL_ARRAY_BUFFER, tex_buffer);
+            glVertexAttribPointer(
+                    1,                  // must match shader layout
+                    2,                  // size : U+V => 2
+                    GL_FLOAT,           // type
+                    GL_FALSE,           // normalized?
+                    0,                  // stride
+                    (void *) 0          // array buffer offset
+            );
+
+            if (show_points) {
+                glDrawArrays(GL_POINTS, 0, triangle_count * 3);
+            } else if (!show_points) {
+                glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+            }
+
+            // draw
+            glDisableVertexAttribArray(0);
+            glDisableVertexAttribArray(1);
+
+            // important otherwise memory will be full soon
+            if (capture_flag) {
+                XDestroyImage(image);
             }
         }
-
-        // use shader
-        glUseProgram(program_id);
-
-        // send transformations to shader
-        glUniformMatrix4fv(matrix_id, 1, GL_FALSE, &MVP[0][0]);
-
-        /**
-         * specify vertex arrays of vertices and uv's
-         * draw finalyy
-         */
-        if (capture_flag) {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
-                            image->data);
-            glUniform1i(screen_texture_id, 0);
-        } else if (!capture_flag) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, texture);
-            glUniform1i(texture_id, 0);
-        }
-
-        // specify vertex arrays of vertices and uv's
-        glEnableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-        glVertexAttribPointer(
-                0,                  // must match shader layout
-                3,                  // size
-                GL_FLOAT,           // type
-                GL_FALSE,           // normalized?
-                0,                  // stride
-                (void *) 0          // array buffer offset
-        );
-
-        glEnableVertexAttribArray(1);
-        glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-        glVertexAttribPointer(
-                1,                  // must match shader layout
-                2,                  // size : U+V => 2
-                GL_FLOAT,           // type
-                GL_FALSE,           // normalized?
-                0,                  // stride
-                (void *) 0          // array buffer offset
-        );
-
-        if (show_points) {
-            glDrawArrays(GL_POINTS, 0, triangle_count * 3);
-        } else if (!show_points) {
-            glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
-        }
-
-        // draw
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
 
         // Swap buffers
         glfwSwapBuffers(glfw_window);
         glfwPollEvents();
 
-        // important otherwise memory will be full soon
-        if (capture_flag) {
-            XDestroyImage(image);
-        }
+
+
 
         // check for keyboard input
         if (glfwGetKey(glfw_window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
             glfwGetKey(glfw_window, GLFW_KEY_Q) == GLFW_PRESS) {
             running = false;
         }
-
+        if (glfwGetKey(glfw_window, GLFW_KEY_R) == GLFW_PRESS){
+            if (reload){
+                reload = false;
+                std::cout << "Reload" << std::endl;
+            } else {
+                reload = true;
+                std::cout << "Reload" << std::endl;
+            }
+        }
+        if (glfwGetKey(glfw_window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+            if (paused){
+                std::cout << "Stop pause" << std::endl;
+                paused = false;
+            } else {
+                std::cout << "Start pause" << std::endl;
+                paused = true;
+            }
+        }
     }
 
-
-
     // Cleanup VBO and shader
-    glDeleteBuffers(1, &vertexbuffer);
-    glDeleteBuffers(1, &uvbuffer);
+    glDeleteBuffers(1, &vtx_buffer);
+    glDeleteBuffers(1, &tex_buffer);
     glDeleteProgram(program_id);
-    glDeleteTextures(1, &screen_texture);
+    glDeleteTextures(1, &tex);
     glDeleteVertexArrays(1, &vertex_array_id);
-
-    /**
-     * x11 cleanup
-     */
 
     XCloseDisplay(display);
 
@@ -486,39 +320,6 @@ bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
 
             // append to input vector
             to_fill->push_back(glm::vec3(x, y, z));
-        }
-
-        return true;
-    } else {
-        std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
-        return false;
-    }
-}
-
-bool loadDomeMapFile(const char *filepath, std::vector<glm::vec3> *indexed_mask, std::vector<glm::vec3> *indexed_dome) {
-
-    std::ifstream f;
-    std::string s;
-
-    f.open(filepath, std::ios::in);
-
-    if (f.is_open()) {
-
-        std::cout << "Loading file: '" << filepath << "'!" << std::endl;
-        int idx = 0;
-        while (!f.eof()) {
-
-            getline(f, s);
-            std::istringstream iss(s);
-
-            float x1, y1, z1, x2, y2, z2;
-            iss >> x1 >> y1 >> z1 >> x2 >> y2 >> z2;
-            //std::cout << x << " " << y << " " << z << std::endl;
-
-            // add to map
-            indexed_mask->push_back(glm::vec3(x1, y1, z1));
-            indexed_dome->push_back(glm::vec3(x2, y2, z2));
-            idx++;
         }
 
         return true;
@@ -653,7 +454,6 @@ GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path)
     return ProgramID;
 }
 
-
 GLuint loadBMP_custom(const char *imagepath) {
 
     printf("Reading image %s\n", imagepath);
@@ -748,6 +548,200 @@ GLuint loadBMP_custom(const char *imagepath) {
     return textureID;
 }
 
+GLuint setup_vertices(const char *filepath, int *triangle_count){
+    std::vector<glm::vec3> mesh;
+
+    // setup mesh
+    loadFile(filepath, &mesh);
+    // get meta information about calculated
+    auto circle_count = (int) mesh.back().x;
+    auto points_per_circle = (int) mesh.back().y;
+    auto point_count = (int) mesh.back().z;
+    std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
+
+    mesh.pop_back();
+    mesh.pop_back();
+    //mapVecToRange(&mesh);
+    std::cout << "blue size: " << mesh.size() << " read point count: " << point_count << std::endl;
+    if (mesh.size() != point_count) {
+        std::cout << "Warp points do not match" << std::endl;
+        return -1;
+    }
+
+    // IF HAGEN SWITCHES HIS ZERO COORDS AGAIN JUST SLAP HIM IN THE FACE
+    // for (int i = 0; i < mesh.size(); ++i) {
+    //    mesh[i].y = mesh[i].z;
+    //    mesh[i].z = 0.0f;
+    // }
+
+    std::vector<glm::vec3> mesh_vec;
+    // create mesh
+    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
+        if (circle_idx == 0) {
+            for (int t = 1; t < points_per_circle + 1; ++t) {
+                // start triangles around center
+                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
+
+                int i1 = 0;
+                int i2 = t;
+                int i3 = 1 + (t % points_per_circle);
+                mesh_vec.push_back(mesh[i1]);
+                mesh_vec.push_back(mesh[i2]);
+                mesh_vec.push_back(mesh[i3]);
+                *triangle_count += 1;
+            }
+        } else {
+            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
+            for (int idx = 0; idx < points_per_circle; ++idx) {
+                int i1 = start_point + idx;
+                int i2 = start_point + idx + points_per_circle;
+                int i3 = start_point + (idx + 1) % points_per_circle;
+                mesh_vec.push_back(mesh[i1]);
+                mesh_vec.push_back(mesh[i2]);
+                mesh_vec.push_back(mesh[i3]);
+                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
+                int i4 = start_point + (idx + 1) % points_per_circle;
+                int i5 = start_point + idx + points_per_circle;
+                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
+                mesh_vec.push_back(mesh[i4]);
+                mesh_vec.push_back(mesh[i5]);
+                mesh_vec.push_back(mesh[i6]);
+                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
+                *triangle_count += 2;
+            }
+        }
+    }
+
+    // create buffers
+    GLuint vertex_buffer;
+    glGenBuffers(1, &vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, mesh_vec.size() * sizeof(glm::vec3), &mesh_vec[0], GL_STATIC_DRAW);
+    return vertex_buffer;
 
 
+}
 
+
+GLuint setup_tex_coords(const char *filepath){
+
+    std::vector<glm::vec3> uv_coords;
+    // setup mesh
+    loadFile(filepath, &uv_coords);
+    // get meta information about calculated
+    auto circle_count = (int) uv_coords.back().x;
+    auto points_per_circle = (int) uv_coords.back().y;
+    auto point_count = (int) uv_coords.back().z;
+    uv_coords.pop_back();
+    uv_coords.pop_back();
+
+    // IF HAGEN SWITCHES HIS ZERO COORDS AGAIN JUST SLAP HIM IN THE FACE
+    // for (int i = 0; i < uv_coords.size(); ++i) {
+    //     uv_coords[i].y = uv_coords[i].z;
+    //     uv_coords[i].z = 0.0f;
+    // }
+
+    std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
+    //mapVecToRange(&uv_coords);
+    std::vector<glm::vec2> tex_vec;
+    for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
+        if (circle_idx == 0) {
+            for (int t = 1; t < points_per_circle + 1; ++t) {
+                // start triangles around center
+                //std::cout << 0 << " " << t << " " << 1 + (t % points_per_circle) << std::endl;
+                int i1 = 0;
+                int i2 = t;
+                int i3 = 1 + (t % points_per_circle);
+
+                //float u = mapToRange(uv_coords[i1].x, min_pos_x, max_pos_x, 0.0f, 1.0f);
+                float u = uv_coords[i1].x;
+                float v = uv_coords[i1].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i2].x;
+                v = uv_coords[i2].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i3].x;
+                v = uv_coords[i3].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+            }
+        } else {
+            int start_point = circle_idx * points_per_circle - (points_per_circle - 1);
+            for (int idx = 0; idx < points_per_circle; ++idx) {
+                int i1 = start_point + idx;
+                int i2 = start_point + idx + points_per_circle;
+                int i3 = start_point + (idx + 1) % points_per_circle;
+                float u = uv_coords[i1].x;
+                float v = uv_coords[i1].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i2].x;
+                v = uv_coords[i2].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i3].x;
+                v = uv_coords[i3].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                //std::cout << i1<< " " << i2 << " " << i3 << std::endl;
+                int i4 = start_point + (idx + 1) % points_per_circle;
+                int i5 = start_point + idx + points_per_circle;
+                int i6 = start_point + ((idx + 1) % points_per_circle) + points_per_circle;
+                u = uv_coords[i4].x;
+                v = uv_coords[i4].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i5].x;
+                v = uv_coords[i5].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+
+                u = uv_coords[i6].x;
+                v = uv_coords[i6].y;
+                tex_vec.emplace_back(glm::vec2(u, v));
+                //std::cout << i4 << " " << i5<< " " << i6 << std::endl;
+            }
+        }
+    }
+
+    GLuint uv_buffer;
+    glGenBuffers(1, &uv_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, uv_buffer);
+    glBufferData(GL_ARRAY_BUFFER, tex_vec.size() * sizeof(glm::vec2), &tex_vec[0], GL_STATIC_DRAW);
+    return uv_buffer;
+}
+
+GLuint init_static_texture(){
+    // CREATE AND INIT STATIC TEXTURE FROM BMP
+    GLuint static_tex;
+    //texture = loadBMP_custom("../dome_coords.bmp");
+    //texture = loadBMP_custom("../polar.bmp");
+    //texture = loadBMP_custom("../polar_coords.bmp");
+    static_tex = loadBMP_custom("../pol_coords.bmp");
+    // texture = loadBMP_custom("../game_scene.bmp");
+    //texture = loadBMP_custom("../tex.bmp");
+    //texture = loadBMP_custom("../gradient2.bmp");
+    return static_tex;
+}
+
+
+GLuint init_dynamic_texture(Display *dis, Window win, XImage *image){
+    // CREATE AND INIT DYNAMIC TEXTURE FROM SCREEN
+    GLuint dynamic_tex;
+    // get initial image
+    image = XGetImage(dis, win, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+    //image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+
+    // create and bind new texture
+    glGenTextures(0, &dynamic_tex);
+    glBindTexture(GL_TEXTURE_2D, dynamic_tex);
+
+    // specify 2D texture image
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_HEIGHT, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    return dynamic_tex;
+}
