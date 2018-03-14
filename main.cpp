@@ -1,4 +1,3 @@
-
 // Include standard headers
 #include <iostream>
 #include <vector>
@@ -12,101 +11,45 @@
 // X11
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
-//hello this is warped text
-
-//static const int SCREEN_WIDTH = 500;
-int SCREEN_WIDTH = (int) 1920;
-//static const int SCREEN_HEIGHT = 500;
-int SCREEN_HEIGHT = (int) 1080;
-
-bool VSYNC = false;
-
-bool capture_flag = false;
-bool show_points = false;
-bool show_polys = true;
 
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <sstream>
 
+// gl globals
+GLFWwindow * glfw_window;
+Display * display;
+Window root_window;
+XImage *image;
+
+int SCREEN_WIDTH = (int) 1920;
+int SCREEN_HEIGHT = (int) 1080;
+
+bool VSYNC = false;
+bool capture_flag = true;
+bool show_points = false;
+bool show_polys = false;
+
+
 // function callbacks
 GLuint LoadShaders(const char *, const char *);
-
 bool loadFile(const char *, std::vector<glm::vec3> *);
-
 GLuint setup_vertices(const char *filepath, int *triangle_count);
 GLuint setup_tex_coords(const char *filepath);
-
 GLuint init_static_texture();
 GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
-
 GLuint loadBMP_custom(const char *);
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
 void mapVecToRange(std::vector<glm::vec3> *vec);
+bool initializeGLContext(bool show_polys, bool with_vsync);
+
 
 int main(void) {
 
-    //get x11 client reference
-    Display *display;
-    display = XOpenDisplay(nullptr);
-    Window root_window;
-    root_window = DefaultRootWindow(display);
+    initializeGLContext(false, false);
 
-    // declare image pointer
-    XImage *image;
-
-    // Initialise GLFW
-    GLFWwindow *glfw_window;
-    if (!glfwInit()) {
-        fprintf(stderr, "Failed to initialize GLFW\n");
-        return -1;
-    }
-
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // Open a glfw_window and create its OpenGL context
-    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    int width = mode->width;
-    int height = mode->height;
-
-//    SCREEN_HEIGHT = height;
-//    SCREEN_WIDTH = width;
-    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
-    if (glfw_window == nullptr) {
-        fprintf(stderr, "Failed to open GLFW glfw_window\n");
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(glfw_window);
-
-    // Initialize GLEW
-    glewExperimental = GL_TRUE; // Needed for core profile
-    if (glewInit() != GLEW_OK) {
-        fprintf(stderr, "Failed to initialize GLEW\n");
-        return -1;
-    }
-
-    // init GL settings
-    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glEnable(GL_DEPTH_TEST); // enable depth test
-    glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
-    glEnable(GL_PROGRAM_POINT_SIZE);
-
-    // set show polys flag to show vertice grid
-    if (show_polys) {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-
-    glfwSwapInterval(0);
-    if (VSYNC) {
-        glfwSwapInterval(1);
-    }
 
     GLuint vertex_array_id;
     glGenVertexArrays(1, &vertex_array_id);
@@ -124,9 +67,9 @@ int main(void) {
 
     // camera matrix
     glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0, 0.0, 3.0), // Camera is at (4,3,3), in World Space
-            glm::vec3(0.0, 0.0, 0), // and looks at the origin
-            glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
+            glm::vec3(0.0, 0.0, 3.0), // camera pos world space
+            glm::vec3(0.0, 0.0, 0), // camera lookat
+            glm::vec3(0, 1, 0)  // up-vec
     );
 
     // model
@@ -135,14 +78,13 @@ int main(void) {
 
     // MVP
     glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
-    //glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
+//    glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
 
     int triangle_count = 0;
-
-    GLuint vtx_buffer = setup_vertices("../screen_points_3.txt", &triangle_count);
+    GLuint vtx_buffer = setup_vertices("../new_screen_points.txt", &triangle_count);
     std::cout << "TRIANGLE COUNT: " << triangle_count << std::endl;
 
-    GLuint tex_buffer = setup_tex_coords("../texture_coords_3.txt");
+    GLuint tex_buffer = setup_tex_coords("../new_texture_coords.txt");
 
     GLuint tex;
     GLint tex_id;
@@ -194,7 +136,7 @@ int main(void) {
 
             /**
              * specify vertex arrays of vertices and uv's
-             * draw finalyy
+             * draw finally
              */
             if (capture_flag) {
                 glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
@@ -251,9 +193,6 @@ int main(void) {
         glfwSwapBuffers(glfw_window);
         glfwPollEvents();
 
-
-
-
         // check for keyboard input
         if (glfwGetKey(glfw_window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
             glfwGetKey(glfw_window, GLFW_KEY_Q) == GLFW_PRESS) {
@@ -294,6 +233,70 @@ int main(void) {
     return 0;
 }
 
+/**
+ * Initialize GL context
+ * @param show_polys
+ * @param with_vsync
+ * @return
+ */
+bool initializeGLContext(bool show_polys, bool with_vsync) {
+
+    //get x11 client reference
+    display = XOpenDisplay(nullptr);
+    root_window = DefaultRootWindow(display);
+
+    // Initialise GLFW
+    if (!glfwInit()) {
+        fprintf(stderr, "Failed to initialize GLFW\n");
+        return -1;
+    }
+
+    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Open a glfw_window and create its OpenGL context
+    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    int width = mode->width;
+    int height = mode->height;
+
+//    SCREEN_HEIGHT = height;
+//    SCREEN_WIDTH = width;
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
+    if (glfw_window == nullptr) {
+        fprintf(stderr, "Failed to open GLFW glfw_window\n");
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(glfw_window);
+
+    // Initialize GLEW
+    glewExperimental = GL_TRUE; // Needed for core profile
+    if (glewInit() != GLEW_OK) {
+        fprintf(stderr, "Failed to initialize GLEW\n");
+        return -1;
+    }
+
+    // init GL settings
+    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
+    glEnable(GL_DEPTH_TEST); // enable depth test
+    glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
+    glEnable(GL_PROGRAM_POINT_SIZE);
+
+    // set show polys flag to show vertice grid
+    if (show_polys) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
+    glfwSwapInterval(0);
+    if (with_vsync) {
+        glfwSwapInterval(1);
+    }
+
+
+}
 
 /**
  * load file from harddisk
