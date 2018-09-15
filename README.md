@@ -13,9 +13,10 @@ Ubuntu 18.04
 
 
 ```
+sudo apt-get install cmake
 sudo apt-get install libglfw3-dev
 sudo apt-get install libglm-dev 
-sudo apt-get install cmake
 sudo apt-get install libxmu-dev
+sudo apt-get install libglew-dev
 ```
 

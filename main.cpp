@@ -47,10 +47,9 @@ GLuint tex_buffer;
 
 float move_factor = 0.0001f;
 float rotation_factor = 0.0001f;
-glm::vec3 model_position(0.0151398, -0.659297, 0.745437);
+glm::vec3 model_position(0.0, -0.65, -0.5);
 glm::vec3 model_rotation(0.0f, 0.0f, 0.00f);
 glm::mat4 MVP;
-
 
 void print_help();
 
@@ -80,7 +79,6 @@ void handle_framewise_key_input();
 
 int main(int argc, char *argv[])
 {
-
     const char *capture = argv[1];
     if (!capture) {
         if (capture == "true") {
@@ -127,10 +125,12 @@ int main(int argc, char *argv[])
         if (!paused) {
 
             ///print render time per frame
-            if (print_fps) {
+            if (print_fps)
+            {
                 ++num_frames;
                 double current_time = glfwGetTime();
-                if (current_time - last_time >= 1.0) {
+                if (current_time - last_time >= 1.0)
+                {
                     std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
                     num_frames = 0;
                     last_time += 1.0;
@@ -138,13 +138,13 @@ int main(int argc, char *argv[])
             }
 
             /// capture if set true
-            if (capture_flag) {
+            if (capture_flag)
+            {
                 // get screenshot
                 image = XGetImage(display, root_window, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
                 //image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-                if (!image) {
+                if (!image)
                     printf("Unable to create image...\n");
-                }
             }
 
             // use shader
@@ -157,11 +157,13 @@ int main(int argc, char *argv[])
              * specify vertex arrays of vertices and uv's
              * draw finally
              */
-            if (capture_flag) {
+            if (capture_flag)
+            {
                 glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
                                 image->data);
                 glUniform1i(tex_id, 0);
-            } else if (!capture_flag) {
+            } else if (!capture_flag)
+            {
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, tex);
                 glUniform1i(tex_id, 0);
