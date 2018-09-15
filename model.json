@@ -1,0 +1,49 @@
+{
+    "dome": {
+        "position": {
+            "x": 0,
+            "y": 1.9,
+            "z": 0
+        },
+        "radius": {
+            "radius": 1.6
+        }
+    },
+    "mirror": {
+        "position": {
+            "x": 0,
+            "y": 0.5,
+            "z": -1.65
+        },
+        "radius": {
+            "radius": 0.4
+        }
+    },
+    "projector": {
+        "fov": {
+            "fov": 20
+        },
+        "grid": {
+            "ring_elements": 128,
+            "rings": 128
+        },
+        "mesh": {
+            "ring_elements": 32,
+            "rings": 8
+        },
+        "position": {
+            "x": 0,
+            "y": 0.65,
+            "z": -0.5
+        },
+        "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+        },
+        "screen": {
+            "h": 1080,
+            "w": 1920
+        }
+    }
+}

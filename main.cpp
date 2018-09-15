@@ -3,7 +3,6 @@
 #include <vector>
 #include <map>
 #include <fstream>
-
 // GL stuff
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -18,6 +17,9 @@
 #include <sstream>
 
 #include "inc/shader.h"
+#include "inc/json11.hpp"
+#include "inc/input_parser.h"
+#include "inc/texture.h"
 
 // gl globals
 GLFWwindow *glfw_window;
@@ -47,11 +49,17 @@ GLuint tex_buffer;
 
 float move_factor = 0.0001f;
 float rotation_factor = 0.0001f;
-glm::vec3 model_position(0.0, -0.65, -0.5);
+glm::vec3 model_position(0.0, -0.65, 0.5);
 glm::vec3 model_rotation(0.0f, 0.0f, 0.00f);
 glm::mat4 MVP;
 
+json11::Json config;
+std::string mesh_file;
+std::string tex_file;
+
 void print_help();
+
+void parseCommandLineArgs(int argc, char *argv[]);
 
 GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
 
@@ -59,38 +67,29 @@ void loadTransformationValues();
 
 void calculateView(glm::vec3, glm::vec3);
 
-bool loadFile(const char *, std::vector <glm::vec3> *);
+bool loadFile(const char *, std::vector<glm::vec3> *);
 
 GLuint setup_vertices(const char *filepath, int *triangle_count);
 
 GLuint setup_tex_coords(const char *filepath);
 
-GLuint loadBMP_custom(const char *);
-
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
 
 bool initializeGLContext(bool show_polys, bool with_vsync);
 
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
-void handle_framewise_key_input();
+void handleFramewiseKeyInput();
+
+bool loadConfig(const std::string &config);
+
+void parseConfig();
 
 int main(int argc, char *argv[])
 {
-    const char *capture = argv[1];
-    if (!capture) {
-        if (capture == "true") {
-            capture_flag = true;
-        } else if (capture == "false") {
-            capture_flag = false;
-        } else {
-            std::cout << "Invalid parameter" << std::endl;
-            std::cout << "pass 'true' or 'false' to activate/deactivate capturing" << std::endl;
-            std::cout << std::endl;
-        }
-    }
-
     print_help();
+    parseCommandLineArgs(argc, argv);
+    parseConfig();
 
     initializeGLContext(false, false);
 
@@ -102,12 +101,11 @@ int main(int argc, char *argv[])
     GLuint program_id = Shader::loadShaders("shader/simple.vert", "shader/simple.frag");
     GLint matrix_id = glGetUniformLocation(program_id, "MVP");
 
-
     GLuint tex;
     if (capture_flag)
         tex = init_dynamic_texture(display, root_window, image);
     else
-        tex = loadBMP_custom("tex/radialgrid.bmp");
+        tex = Texture::loadBMP("tex/radialgrid.bmp");
 
     GLint tex_id = glGetUniformLocation(program_id, "myTextureSampler");
 
@@ -124,12 +122,10 @@ int main(int argc, char *argv[])
         if (!paused) {
 
             ///print render time per frame
-            if (print_fps)
-            {
+            if (print_fps) {
                 ++num_frames;
                 double current_time = glfwGetTime();
-                if (current_time - last_time >= 1.0)
-                {
+                if (current_time - last_time >= 1.0) {
                     std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
                     num_frames = 0;
                     last_time += 1.0;
@@ -137,8 +133,7 @@ int main(int argc, char *argv[])
             }
 
             /// capture if set true
-            if (capture_flag)
-            {
+            if (capture_flag) {
                 // get screenshot
                 image = XGetImage(display, root_window, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
                 //image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
@@ -156,13 +151,11 @@ int main(int argc, char *argv[])
              * specify vertex arrays of vertices and uv's
              * draw finally
              */
-            if (capture_flag)
-            {
+            if (capture_flag) {
                 glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
                                 image->data);
                 glUniform1i(tex_id, 0);
-            } else if (!capture_flag)
-            {
+            } else if (!capture_flag) {
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, tex);
                 glUniform1i(tex_id, 0);
@@ -196,23 +189,23 @@ int main(int argc, char *argv[])
             glfwSwapBuffers(glfw_window);
             glfwPollEvents();
 
-            handle_framewise_key_input();
+            handleFramewiseKeyInput();
         }
     }
 
-        // Cleanup VBO and shader
-        glDeleteBuffers(1, &vtx_buffer);
-        glDeleteBuffers(1, &tex_buffer);
-        glDeleteProgram(program_id);
-        glDeleteTextures(1, &tex);
-        glDeleteVertexArrays(1, &vertex_array_id);
+    // Cleanup VBO and shader
+    glDeleteBuffers(1, &vtx_buffer);
+    glDeleteBuffers(1, &tex_buffer);
+    glDeleteProgram(program_id);
+    glDeleteTextures(1, &tex);
+    glDeleteVertexArrays(1, &vertex_array_id);
 
-        XCloseDisplay(display);
+    XCloseDisplay(display);
 
-        // Close OpenGL glfw_window and terminate GLFW
-        glfwTerminate();
+    // Close OpenGL glfw_window and terminate GLFW
+    glfwTerminate();
 
-        return 0;
+    return 0;
 }
 
 void print_help()
@@ -241,37 +234,86 @@ void print_help()
     std::cout << "  rotation settings:" << std::endl;
     std::cout << "    3 - decrease rotation factor" << std::endl;
     std::cout << "    4 - increase rotation factor" << std::endl;
+    std::cout << "" << std::endl;
 }
 
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
+void parseCommandLineArgs(int argc, char *argv[])
+{
+    InputParser input_parser(argc, argv);
+    if (input_parser.cmdOptionExists("-capture")) {
+        std::string opt = input_parser.getCmdOption("-capture");
+        if (opt == "true")
+            capture_flag = true;
+        else
+            capture_flag = false;
+    } else {
+        capture_flag = false;
+    }
+
+    if (input_parser.cmdOptionExists("-config")) {
+        std::string opt = input_parser.getCmdOption("-config");
+        if (opt != "") {
+            if (!loadConfig(opt)) {
+                std::cout << "Info: There was no config file specified. Loading defaults!" << std::endl;
+                loadConfig("default/model.json");
+            }
+        } else {
+            std::cout << "Info: There was no config file specified. Loading defaults!" << std::endl;
+            loadConfig("default/model.json");
+        }
+    } else {
+        loadConfig("default/model.json");
+    }
+
+    if (input_parser.cmdOptionExists("-mesh")) {
+        std::string opt = input_parser.getCmdOption("-mesh");
+        if (opt != "") {
+            mesh_file = opt;
+        } else {
+            std::cout << "Info: There was no mesh file specified. Loading default!" << std::endl;
+            mesh_file = "default/default.mesh";
+        }
+    } else {
+        mesh_file = "default/default.mesh";
+    }
+
+    if (input_parser.cmdOptionExists("-tex")) {
+        std::string opt = input_parser.getCmdOption("-tex");
+        if (opt != "") {
+            tex_file = opt;
+        } else {
+            std::cout << "Info: There was no mesh file specified. Loading default!" << std::endl;
+            tex_file = "default/default.tex";
+        }
+    } else {
+        tex_file = "default/default.tex";
+    }
+}
+
+void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         running = false;
 
-    if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+    if (key == GLFW_KEY_R && action == GLFW_PRESS)
         loadTransformationValues();
-    }
 
-    if (key == GLFW_KEY_1 && action == GLFW_PRESS) {
+    if (key == GLFW_KEY_1 && action == GLFW_PRESS)
         move_factor /= 10;
-    }
 
-    if (key == GLFW_KEY_2 && action == GLFW_PRESS) {
+    if (key == GLFW_KEY_2 && action == GLFW_PRESS)
         move_factor *= 10;
-    }
 
-    if (key == GLFW_KEY_3 && action == GLFW_PRESS) {
+    if (key == GLFW_KEY_3 && action == GLFW_PRESS)
         rotation_factor /= 10;
-    }
 
-    if (key == GLFW_KEY_4 && action == GLFW_PRESS) {
+    if (key == GLFW_KEY_4 && action == GLFW_PRESS)
         rotation_factor *= 10;
-    }
 
     if (key == GLFW_KEY_I && action == GLFW_PRESS) {
-        std::cout << "model position: " << model_position.x << " " << model_position.y << " " << model_position.z
+        std::cout << "INFO: model position: " << model_position.x << " " << model_position.y << " " << model_position.z
                   << std::endl;
-        std::cout << "model rotation: " << model_rotation.x << " " << model_rotation.y << " " << model_rotation.z
+        std::cout << "INFO: model rotation: " << model_rotation.x << " " << model_rotation.y << " " << model_rotation.z
                   << std::endl;
     }
 
@@ -300,7 +342,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     }
 }
 
-void handle_framewise_key_input()
+void handleFramewiseKeyInput()
 {
     if (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS) {
         model_position.z -= move_factor;
@@ -346,8 +388,10 @@ void handle_framewise_key_input()
 void loadTransformationValues()
 {
     triangle_count = 0;
-    vtx_buffer = setup_vertices("current.mesh", &triangle_count);
-    tex_buffer = setup_tex_coords("current.tex");
+
+    std::cout << "FAADADA" << mesh_file << std::endl;
+    vtx_buffer = setup_vertices(mesh_file.c_str(), &triangle_count);
+    tex_buffer = setup_tex_coords(tex_file.c_str());
 }
 
 void calculateView(glm::vec3 model_pos, glm::vec3 model_rot)
@@ -399,8 +443,8 @@ bool initializeGLContext(bool show_polys, bool with_vsync)
 
     // Open a glfw_window and create its OpenGL context
     const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    int width = mode->width;
-    int height = mode->height;
+    SCREEN_WIDTH = mode->width;
+    SCREEN_HEIGHT = mode->height;
 
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
     if (glfw_window == nullptr) {
@@ -420,7 +464,7 @@ bool initializeGLContext(bool show_polys, bool with_vsync)
 
     // input settings
     glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
-    glfwSetKeyCallback(glfw_window, key_callback);
+    glfwSetKeyCallback(glfw_window, keyCallback);
 
     // init GL settings
     glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -445,7 +489,7 @@ bool initializeGLContext(bool show_polys, bool with_vsync)
  * load file from harddisk
  * @param filepath
  */
-bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill)
+bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill)
 {
     std::ifstream f;
     std::string s;
@@ -478,7 +522,7 @@ float mapToRange(float value, float in_min, float in_max, float out_min, float o
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void mapVecToRange(std::vector <glm::vec3> *vec)
+void mapVecToRange(std::vector<glm::vec3> *vec)
 {
     float min_val_x = 999999;
     float max_val_x = -999999;
@@ -505,104 +549,9 @@ void mapVecToRange(std::vector <glm::vec3> *vec)
 
 }
 
-GLuint loadBMP_custom(const char *imagepath)
-{
-
-    printf("Reading image %s\n", imagepath);
-
-    // Data read from the header of the BMP file
-    unsigned char header[54];
-    unsigned int dataPos;
-    unsigned int imageSize;
-    unsigned int width, height;
-    // Actual RGB data
-    unsigned char *data;
-
-    // Open the file
-    FILE *file = fopen(imagepath, "rb");
-    if (!file) {
-        printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath);
-        getchar();
-        return 0;
-    }
-
-    // Read the header, i.e. the 54 first bytes
-
-    // If less than 54 bytes are read, problem
-    if (fread(header, 1, 54, file) != 54) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    // A BMP files always begins with "BM"
-    if (header[0] != 'B' || header[1] != 'M') {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    // Make sure this is a 24bpp file
-    if (*(int *) &(header[0x1E]) != 0) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-    if (*(int *) &(header[0x1C]) != 24) {
-        printf("Not a correct BMP file\n");
-        fclose(file);
-        return 0;
-    }
-
-    // Read the information about the image
-    dataPos = *(int *) &(header[0x0A]);
-    imageSize = *(int *) &(header[0x22]);
-    width = *(int *) &(header[0x12]);
-    height = *(int *) &(header[0x16]);
-
-    // Some BMP files are misformatted, guess missing information
-    if (imageSize == 0) imageSize = width * height * 3; // 3 : one byte for each Red, Green and Blue component
-    if (dataPos == 0) dataPos = 54; // The BMP header is done that way
-
-    // Create a buffer
-    data = new unsigned char[imageSize];
-
-    // Read the actual data from the file into the buffer
-    fread(data, 1, imageSize, file);
-
-    // Everything is in memory now, the file can be closed.
-    fclose(file);
-
-    // Create one OpenGL texture
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-
-    // "Bind" the newly created texture : all future texture functions will modify this texture
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    // Give the image to OpenGL
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
-
-    // OpenGL has now copied the data. Free our own version
-    delete[] data;
-
-    // Poor filtering, or ...
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    // ... nice trilinear filtering ...
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // ... which requires mipmaps. Generate them automatically.
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Return the ID of the texture we just created
-    return textureID;
-}
-
 GLuint setup_vertices(const char *filepath, int *triangle_count)
 {
-    std::vector <glm::vec3> mesh;
+    std::vector<glm::vec3> mesh;
 
     // setup mesh
     loadFile(filepath, &mesh);
@@ -621,13 +570,7 @@ GLuint setup_vertices(const char *filepath, int *triangle_count)
         return -1;
     }
 
-    // IF HAGEN SWITCHES HIS ZERO COORDS AGAIN JUST SLAP HIM IN THE FACE
-    // for (int i = 0; i < mesh.size(); ++i) {
-    //    mesh[i].y = mesh[i].z;
-    //    mesh[i].z = 0.0f;
-    // }
-
-    std::vector <glm::vec3> mesh_vec;
+    std::vector<glm::vec3> mesh_vec;
     // create mesh
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
         if (circle_idx == 0) {
@@ -678,7 +621,7 @@ GLuint setup_vertices(const char *filepath, int *triangle_count)
 GLuint setup_tex_coords(const char *filepath)
 {
 
-    std::vector <glm::vec3> uv_coords;
+    std::vector<glm::vec3> uv_coords;
     // setup mesh
     loadFile(filepath, &uv_coords);
     // get meta information about calculated
@@ -688,15 +631,9 @@ GLuint setup_tex_coords(const char *filepath)
     uv_coords.pop_back();
     uv_coords.pop_back();
 
-    // IF HAGEN SWITCHES HIS ZERO COORDS AGAIN JUST SLAP HIM IN THE FACE
-    // for (int i = 0; i < uv_coords.size(); ++i) {
-    //     uv_coords[i].y = uv_coords[i].z;
-    //     uv_coords[i].z = 0.0f;
-    // }
-
     std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
     //mapVecToRange(&uv_coords);
-    std::vector <glm::vec2> tex_vec;
+    std::vector<glm::vec2> tex_vec;
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
         if (circle_idx == 0) {
             for (int t = 1; t < points_per_circle + 1; ++t) {
@@ -786,3 +723,46 @@ GLuint init_dynamic_texture(Display *dis, Window win, XImage *image)
 
     return dynamic_tex;
 }
+
+bool loadConfig(const std::string &file_name)
+{
+    std::ifstream ifs(file_name);
+    if (ifs.good()) {
+        std::cout << "Loaded file '" << file_name << "' successfully" << std::endl;
+    } else {
+        std::cout << "Config: '" << file_name << "' not found!" << std::endl;
+        return false;
+    }
+
+    // parse to string
+    std::string str((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+
+    std::string error;
+    auto json = json11::Json::parse(str, error);
+
+    if (error.empty()) {
+        std::cout << "Json parsing succeeded!" << std::endl;
+    } else {
+        std::cout << "Error loading json: " << error << std::endl;
+        return false;
+    }
+
+    config = json.object_items();
+
+    return true;
+}
+
+void parseConfig()
+{
+    std::cout << config.dump() << std::endl;
+    float projector_x = (float) config["projector"]["position"]["x"].number_value();
+    float projector_y = (float) config["projector"]["position"]["y"].number_value();
+    float projector_z = (float) config["projector"]["position"]["z"].number_value();
+
+    std::cout << "x: " << (-1 * projector_x) << " y: " << (-1 * projector_y) << " z: " << (-1 * projector_z)
+              << std::endl;
+
+    glm::vec3 projector_position(-1* projector_x, -1* projector_y, -1* projector_z);
+    model_position = projector_position;
+}
+
