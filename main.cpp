@@ -25,8 +25,8 @@ Display *display;
 Window root_window;
 XImage *image;
 
-int SCREEN_WIDTH = (int) 1920;
-int SCREEN_HEIGHT = (int) 1080;
+int SCREEN_WIDTH = (int) 1200;
+int SCREEN_HEIGHT = (int) 1000;
 
 bool VSYNC = false;
 #if 0
@@ -52,8 +52,6 @@ glm::vec3 model_rotation(0.0f, 0.0f, 0.00f);
 glm::mat4 MVP;
 
 void print_help();
-
-GLuint init_static_texture();
 
 GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
 
@@ -103,6 +101,7 @@ int main(int argc, char *argv[])
     // load shaders
     GLuint program_id = Shader::loadShaders("shader/simple.vert", "shader/simple.frag");
     GLint matrix_id = glGetUniformLocation(program_id, "MVP");
+
 
     GLuint tex;
     if (capture_flag)
@@ -199,6 +198,7 @@ int main(int argc, char *argv[])
 
             handle_framewise_key_input();
         }
+    }
 
         // Cleanup VBO and shader
         glDeleteBuffers(1, &vtx_buffer);
@@ -213,7 +213,6 @@ int main(int argc, char *argv[])
         glfwTerminate();
 
         return 0;
-    }
 }
 
 void print_help()
@@ -468,10 +467,10 @@ bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill)
         }
 
         return true;
-    } else {
-        std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
-        return false;
     }
+
+    std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
+    return false;
 }
 
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max)
@@ -770,8 +769,9 @@ GLuint init_dynamic_texture(Display *dis, Window win, XImage *image)
     // CREATE AND INIT DYNAMIC TEXTURE FROM SCREEN
     GLuint dynamic_tex;
     // get initial image
-    image = XGetImage(dis, win, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
-    //image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+//    image = XGetImage(dis, win, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
+    std::cout << "working" << std::endl;
+    image = XGetImage(display, root_window, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, AllPlanes, ZPixmap);
 
     // create and bind new texture
     glGenTextures(0, &dynamic_tex);

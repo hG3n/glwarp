@@ -1,3 +1,0 @@
-/home/hgen/Desktop/glwarp/build/CMakeFiles/rebuild_cache.dir
-/home/hgen/Desktop/glwarp/build/CMakeFiles/glwarp.dir
-/home/hgen/Desktop/glwarp/build/CMakeFiles/edit_cache.dir
