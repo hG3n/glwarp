@@ -1,0 +1,32 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/domisgroup/Schreibtisch/glwarp/main.cpp
+iostream
+-
+vector
+-
+map
+-
+fstream
+-
+GL/glew.h
+-
+GLFW/glfw3.h
+-
+X11/Xlib.h
+-
+X11/Xmu/WinUtil.h
+-
+glm/glm.hpp
+-
+glm/gtc/matrix_transform.hpp
+-
+sstream
+-
+

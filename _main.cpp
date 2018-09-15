@@ -18,8 +18,8 @@
 #include <sstream>
 
 // gl globals
-GLFWwindow *glfw_window;
-Display *display;
+GLFWwindow * glfw_window;
+Display * display;
 Window root_window;
 XImage *image;
 
@@ -27,85 +27,90 @@ int SCREEN_WIDTH = (int) 1920;
 int SCREEN_HEIGHT = (int) 1080;
 
 bool VSYNC = false;
-#if 0
-    bool capture_flag = false;
-#else
-    bool capture_flag = true;
-#endif
-
-bool show_points = false;
+bool capture_flag = true;
 bool show_polys = false;
 bool paused = false;
+bool show_points = false;
 bool running = true;
-bool print_fps = true;
-
-int triangle_count;
-GLuint vtx_buffer;
-GLuint tex_buffer;
 
 float move_factor = 0.0001f;
 float rotation_factor = 0.0001f;
-glm::vec3 model_position(0.0151398, -0.659297, 0.745437);
+glm::vec3 model_position(0.0f, 0.0f, 1.0f);
 glm::vec3 model_rotation(0.0f, 0.0f, 0.00f);
 glm::mat4 MVP;
 
-
-void print_help();
-GLuint init_static_texture();
-GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
-void loadTransformationValues();
-void calculateView(glm::vec3, glm::vec3);
+// function callbacks
 GLuint LoadShaders(const char *, const char *);
-bool loadFile(const char *, std::vector <glm::vec3> *);
+bool loadFile(const char *, std::vector<glm::vec3> *);
 GLuint setup_vertices(const char *filepath, int *triangle_count);
 GLuint setup_tex_coords(const char *filepath);
+GLuint init_static_texture();
+GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
 GLuint loadBMP_custom(const char *);
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
+void mapVecToRange(std::vector<glm::vec3> *vec);
 bool initializeGLContext(bool show_polys, bool with_vsync);
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
-void handle_framewise_key_input();
 
 
-int main(int argc, char *argv[]) {
+int main(void) {
 
-
-    const char *capture = argv[1];
-    if(!capture) { 
-        if(capture == "true") {
-            capture_flag = true;
-        } else if( capture == "false"){
-            capture_flag = false;
-        } else {
-            std::cout << "Invalid parameter" << std::endl;
-            std::cout << "pass 'true' or 'false' to activate/deactivate capturing" << std::endl;
-            std::cout << std::endl; 
-        }
-    } 
-
-    print_help();
+    // get system arguments
+    const char *texture_file = argv[1];
+    bool show_polys = (bool) argv[2];
 
     initializeGLContext(false, false);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     GLuint vertex_array_id;
     glGenVertexArrays(1, &vertex_array_id);
     glBindVertexArray(vertex_array_id);
 
     // load shaders
-    GLuint program_id = LoadShaders("simple.vert", "simple.frag");
+    GLuint program_id = LoadShaders("../simple.vert", "../simple.frag");
+
+    // build model view projection matrix
+    // Get a handle for our "MVP" uniform
     GLint matrix_id = glGetUniformLocation(program_id, "MVP");
 
-    GLuint tex;
-    if(capture_flag) {
-        tex = init_dynamic_texture(display, root_window, image);
-    } else {
-        tex = loadBMP_custom("radialgrid.bmp");
-    }
-    GLint tex_id = glGetUniformLocation(program_id, "myTextureSampler");
+    // projection matrix
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
 
-    calculateView(model_position, model_rotation);
-    loadTransformationValues();
+    // camera matrix
+    glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0, 0.0, 3.0), // camera pos world space
+            glm::vec3(0.0, 0.0, 0), // camera lookat
+            glm::vec3(0, 1, 0)  // up-vec
+    );
+
+    // model
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 scale = glm::scale(model, glm::vec3(16.0f / 9.0f, 1.0f, 1.0f));
+
+    // MVP
+    glm::mat4 MVP = projection * view * model * scale; // Remember, matrix multiplication is the other way around
+//    glm::mat4 MVP = projection * view * model; //* scale; // Remember, matrix multiplication is the other way around
+
+    int triangle_count = 0;
+    GLuint vtx_buffer = setup_vertices("../new_screen_points.txt", &triangle_count);
+    std::cout << "TRIANGLE COUNT: " << triangle_count << std::endl;
+
+    GLuint tex_buffer = setup_tex_coords("../new_texture_coords.txt");
+
+    GLuint tex;
+    GLint tex_id;
+    if (!capture_flag) {
+        tex = init_static_texture();
+        tex_id = glGetUniformLocation(program_id, "myTextureSampler");
+    } else if (capture_flag) {
+        tex = init_dynamic_texture(display, root_window, image);
+        tex_id = glGetUniformLocation(program_id, "myTextureSampler");
+    }
 
     // main loop
+    bool running = true;
+    bool paused = false;
+    bool reload= false;
     double last_time = glfwGetTime();
     int num_frames = 0;
     while (running && glfwWindowShouldClose(glfw_window) == 0) {
@@ -117,14 +122,12 @@ int main(int argc, char *argv[]) {
              * print render time per frame
              */
             // print ms per frame
-            if(print_fps) {
-                ++num_frames;
-                double current_time = glfwGetTime();
-                if (current_time - last_time >= 1.0) {
-                    std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
-                    num_frames = 0;
-                    last_time += 1.0;
-                }
+            ++num_frames;
+            double current_time = glfwGetTime();
+            if (current_time - last_time >= 1.0) {
+                std::cout << "ms/frame: " << (1000.0 / double(num_frames)) << std::endl;
+                num_frames = 0;
+                last_time += 1.0;
             }
 
             if (capture_flag) {
@@ -161,11 +164,25 @@ int main(int argc, char *argv[]) {
             // specify vertex arrays of vertices and uv's
             glEnableVertexAttribArray(0);
             glBindBuffer(GL_ARRAY_BUFFER, vtx_buffer);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *) 0);
+            glVertexAttribPointer(
+                    0,                  // must match shader layout
+                    3,                  // size
+                    GL_FLOAT,           // type
+                    GL_FALSE,           // normalized?
+                    0,                  // stride
+                    (void *) 0          // array buffer offset
+            );
 
             glEnableVertexAttribArray(1);
             glBindBuffer(GL_ARRAY_BUFFER, tex_buffer);
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void *) 0);
+            glVertexAttribPointer(
+                    1,                  // must match shader layout
+                    2,                  // size : U+V => 2
+                    GL_FLOAT,           // type
+                    GL_FALSE,           // normalized?
+                    0,                  // stride
+                    (void *) 0          // array buffer offset
+            );
 
             if (show_points) {
                 glDrawArrays(GL_POINTS, 0, triangle_count * 3);
@@ -187,9 +204,29 @@ int main(int argc, char *argv[]) {
         glfwSwapBuffers(glfw_window);
         glfwPollEvents();
 
-        handle_framewise_key_input();
-
-
+        // check for keyboard input
+        if (glfwGetKey(glfw_window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
+            glfwGetKey(glfw_window, GLFW_KEY_Q) == GLFW_PRESS) {
+            running = false;
+        }
+        if (glfwGetKey(glfw_window, GLFW_KEY_R) == GLFW_PRESS){
+            if (reload){
+                reload = false;
+                std::cout << "Reload" << std::endl;
+            } else {
+                reload = true;
+                std::cout << "Reload" << std::endl;
+            }
+        }
+        if (glfwGetKey(glfw_window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+            if (paused){
+                std::cout << "Stop pause" << std::endl;
+                paused = false;
+            } else {
+                std::cout << "Start pause" << std::endl;
+                paused = true;
+            }
+        }
     }
 
     // Cleanup VBO and shader
@@ -205,154 +242,6 @@ int main(int argc, char *argv[]) {
     glfwTerminate();
 
     return 0;
-}
-
-void print_help() {
-
-    std::cout << "GLWarp 0.1" << std::endl;
-    std::cout << "==========" << std::endl;
-    std::cout <<  std::endl;
-
-    std::cout << "Controls:" << std::endl;
-    std::cout << "  general:" << std::endl;
-    std::cout << "    esc - exit glwarp << std::endl;" << std::endl;
-    std::cout << "    r - reload transformation settings" << std::endl;
-    std::cout << "    i - print mesh position and rotation information" << std::endl;
-    std::cout << "    x - reset mesh position and rotation" << std::endl;
-    std::cout << "    f - activate continuous fps output" << std::endl;
-    std::cout << "  mesh:" << std::endl;
-    std::cout << "    w - increase distance to mesh" << std::endl;
-    std::cout << "    s - decrease distance to mesh" << std::endl;
-    std::cout << "    a - move mesh to the left" << std::endl;
-    std::cout << "    d - move mesh to the right" << std::endl;
-    std::cout << "    j - move mesh up" << std::endl;
-    std::cout << "    k - move mesh down" << std::endl;
-    std::cout << "  movement settings:" << std::endl;
-    std::cout << "    1 - decrease movement factor" << std::endl;
-    std::cout << "    2 - increase movement factor" << std::endl;
-    std::cout << "  rotation settings:" << std::endl;
-    std::cout << "    3 - decrease rotation factor" << std::endl;
-    std::cout << "    4 - increase rotation factor" << std::endl;
-}
-
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        running = false;
-
-    if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-        loadTransformationValues();
-    }
-
-    if (key == GLFW_KEY_1 && action == GLFW_PRESS) {
-        move_factor /= 10;
-    }
-
-    if (key == GLFW_KEY_2 && action == GLFW_PRESS) {
-        move_factor *= 10;
-    }
-
-    if (key == GLFW_KEY_3 && action == GLFW_PRESS) {
-        rotation_factor /= 10;
-    }
-
-    if (key == GLFW_KEY_4 && action == GLFW_PRESS) {
-        rotation_factor *= 10;
-    }
-
-    if (key == GLFW_KEY_I && action == GLFW_PRESS) {
-        std::cout << "model position: " << model_position.x << " " << model_position.y << " " << model_position.z << std::endl;
-        std::cout << "model rotation: " << model_rotation.x << " " << model_rotation.y << " " << model_rotation.z << std::endl;
-    }
-
-    if(key == GLFW_KEY_F && action == GLFW_PRESS) {
-        if(print_fps)
-            print_fps = false;
-        else
-            print_fps = true;
-    }
-
-    if (key == GLFW_KEY_X && action == GLFW_PRESS) {
-        model_position = glm::vec3(0.0f, 0.0f, 0.0f);
-        model_rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-        calculateView(model_position, model_rotation);
-    }
-
-
-    if (glfwGetKey(glfw_window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        if (paused) {
-            std::cout << "Stop pause" << std::endl;
-            paused = false;
-        } else {
-            std::cout << "Start pause" << std::endl;
-            paused = true;
-        }
-    }
-}
-
-void handle_framewise_key_input() {
-
-    if (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS) {
-        model_position.z -= move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_S) == GLFW_PRESS) {
-        model_position.z += move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_A) == GLFW_PRESS) {
-        model_position.x -= move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_D) == GLFW_PRESS) {
-        model_position.x += move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_J) == GLFW_PRESS) {
-        model_position.y -= move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_K) == GLFW_PRESS) {
-        model_position.y += move_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_H) == GLFW_PRESS) {
-        model_rotation.x += rotation_factor;
-        calculateView(model_position, model_rotation);
-    }
-    if (glfwGetKey(glfw_window, GLFW_KEY_L) == GLFW_PRESS) {
-        model_rotation.x -= rotation_factor;
-        calculateView(model_position, model_rotation);
-    }
-}
-
-void loadTransformationValues() {
-    triangle_count = 0;
-    vtx_buffer = setup_vertices("current.mesh", &triangle_count);
-    tex_buffer = setup_tex_coords("current.tex");
-}
-
-void calculateView(glm::vec3 model_pos, glm::vec3 model_rot) {
-
-    // projection matrix
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
-
-    // camera matrix
-    glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0, 0.0, 0.0), // camera pos world space
-            glm::vec3(0.0, 0.0, 100.0), // camera lookat
-            glm::vec3(0, 1, 0)  // up-vec
-    );
-
-
-    // model
-    glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, model_pos);
-    model = glm::translate(model, glm::vec3(-model_pos));
-    model = glm::rotate(model, model_rot.x, glm::vec3(1, 0, 0));
-    model = glm::translate(model, glm::vec3(model_pos));
-
-    // build mvp
-    MVP = projection * view * model;
 }
 
 /**
@@ -401,10 +290,6 @@ bool initializeGLContext(bool show_polys, bool with_vsync) {
         return -1;
     }
 
-    // input settings
-    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
-    glfwSetKeyCallback(glfw_window, key_callback);
-
     // init GL settings
     glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
     glEnable(GL_DEPTH_TEST); // enable depth test
@@ -421,14 +306,14 @@ bool initializeGLContext(bool show_polys, bool with_vsync) {
         glfwSwapInterval(1);
     }
 
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
 }
 
 /**
  * load file from harddisk
  * @param filepath
  */
-bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill) {
+bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill) {
 
     std::ifstream f;
     std::string s;
@@ -462,7 +347,7 @@ float mapToRange(float value, float in_min, float in_max, float out_min, float o
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void mapVecToRange(std::vector <glm::vec3> *vec) {
+void mapVecToRange(std::vector<glm::vec3> *vec) {
     float min_val_x = 999999;
     float max_val_x = -999999;
     float min_val_y = 999999;
@@ -677,8 +562,8 @@ GLuint loadBMP_custom(const char *imagepath) {
     return textureID;
 }
 
-GLuint setup_vertices(const char *filepath, int *triangle_count) {
-    std::vector <glm::vec3> mesh;
+GLuint setup_vertices(const char *filepath, int *triangle_count){
+    std::vector<glm::vec3> mesh;
 
     // setup mesh
     loadFile(filepath, &mesh);
@@ -703,7 +588,7 @@ GLuint setup_vertices(const char *filepath, int *triangle_count) {
     //    mesh[i].z = 0.0f;
     // }
 
-    std::vector <glm::vec3> mesh_vec;
+    std::vector<glm::vec3> mesh_vec;
     // create mesh
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
         if (circle_idx == 0) {
@@ -751,9 +636,10 @@ GLuint setup_vertices(const char *filepath, int *triangle_count) {
 
 }
 
-GLuint setup_tex_coords(const char *filepath) {
 
-    std::vector <glm::vec3> uv_coords;
+GLuint setup_tex_coords(const char *filepath){
+
+    std::vector<glm::vec3> uv_coords;
     // setup mesh
     loadFile(filepath, &uv_coords);
     // get meta information about calculated
@@ -771,7 +657,7 @@ GLuint setup_tex_coords(const char *filepath) {
 
     std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
     //mapVecToRange(&uv_coords);
-    std::vector <glm::vec2> tex_vec;
+    std::vector<glm::vec2> tex_vec;
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
         if (circle_idx == 0) {
             for (int t = 1; t < points_per_circle + 1; ++t) {
@@ -839,7 +725,21 @@ GLuint setup_tex_coords(const char *filepath) {
     return uv_buffer;
 }
 
-GLuint init_dynamic_texture(Display *dis, Window win, XImage *image) {
+GLuint init_static_texture(){
+    // CREATE AND INIT STATIC TEXTURE FROM BMP
+    GLuint static_tex;
+    //texture = loadBMP_custom("../dome_coords.bmp");
+    //texture = loadBMP_custom("../polar.bmp");
+    //texture = loadBMP_custom("../polar_coords.bmp");
+    static_tex = loadBMP_custom("../pol_coords.bmp");
+    // texture = loadBMP_custom("../game_scene.bmp");
+    //texture = loadBMP_custom("../tex.bmp");
+    //texture = loadBMP_custom("../gradient2.bmp");
+    return static_tex;
+}
+
+
+GLuint init_dynamic_texture(Display *dis, Window win, XImage *image){
     // CREATE AND INIT DYNAMIC TEXTURE FROM SCREEN
     GLuint dynamic_tex;
     // get initial image

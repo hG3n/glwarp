@@ -1,0 +1,3 @@
+/home/domisgroup/Schreibtisch/glwarp/build/CMakeFiles/edit_cache.dir
+/home/domisgroup/Schreibtisch/glwarp/build/CMakeFiles/rebuild_cache.dir
+/home/domisgroup/Schreibtisch/glwarp/build/CMakeFiles/glwarp.dir
