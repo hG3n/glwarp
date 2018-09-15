@@ -6,11 +6,9 @@
 // GL stuff
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-
 // X11
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
-
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -20,6 +18,7 @@
 #include "inc/json11.hpp"
 #include "inc/input_parser.h"
 #include "inc/texture.h"
+#include "inc/file_io.h"
 
 // gl globals
 GLFWwindow *glfw_window;
@@ -30,13 +29,8 @@ XImage *image;
 int SCREEN_WIDTH = (int) 1200;
 int SCREEN_HEIGHT = (int) 1000;
 
-bool VSYNC = false;
-#if 0
+bool vsync = false;
 bool capture_flag = false;
-#else
-bool capture_flag = true;
-#endif
-
 bool show_points = false;
 bool show_polys = false;
 bool paused = false;
@@ -56,10 +50,13 @@ glm::mat4 MVP;
 json11::Json config;
 std::string mesh_file;
 std::string tex_file;
+std::string texture_image;
 
 void print_help();
 
 void parseCommandLineArgs(int argc, char *argv[]);
+
+bool initializeGLContext(bool show_polys, bool with_vsync);
 
 GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
 
@@ -67,15 +64,9 @@ void loadTransformationValues();
 
 void calculateView(glm::vec3, glm::vec3);
 
-bool loadFile(const char *, std::vector<glm::vec3> *);
-
 GLuint setup_vertices(const char *filepath, int *triangle_count);
 
 GLuint setup_tex_coords(const char *filepath);
-
-float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
-
-bool initializeGLContext(bool show_polys, bool with_vsync);
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
@@ -85,13 +76,15 @@ bool loadConfig(const std::string &config);
 
 void parseConfig();
 
+/**
+ * main
+ */
 int main(int argc, char *argv[])
 {
-    print_help();
     parseCommandLineArgs(argc, argv);
     parseConfig();
 
-    initializeGLContext(false, false);
+    initializeGLContext(show_polys, vsync);
 
     GLuint vertex_array_id;
     glGenVertexArrays(1, &vertex_array_id);
@@ -100,12 +93,16 @@ int main(int argc, char *argv[])
     // load shaders
     GLuint program_id = Shader::loadShaders("shader/simple.vert", "shader/simple.frag");
     GLint matrix_id = glGetUniformLocation(program_id, "MVP");
+    std::cout << std::endl;
 
     GLuint tex;
-    if (capture_flag)
+    if (capture_flag) {
         tex = init_dynamic_texture(display, root_window, image);
-    else
-        tex = Texture::loadBMP("tex/radialgrid.bmp");
+    }
+    else {
+        tex = Texture::loadBMP(texture_image.c_str());
+        std::cout << std::endl;
+    }
 
     GLint tex_id = glGetUniformLocation(program_id, "myTextureSampler");
 
@@ -212,11 +209,22 @@ void print_help()
 {
     std::cout << "GLWarp 1.0b" << std::endl;
     std::cout << "==========" << std::endl;
+
+    std::cout << "Command Line Options" << std::endl;
+    std::cout << "  -fps               [print fps]" << std::endl;
+    std::cout << "  -poly              [show mesh polylines]" << std::endl;
+    std::cout << "  -vsync             [enable vsync]" << std::endl;
+    std::cout << "  -capture           [enable capturing" << std::endl;
+    std::cout << "  -h                 [print this dialog]" << std::endl;
+    std::cout << "  -config <file>     [specify model config file]" << std::endl;
+    std::cout << "  -mesh <file>       [specify mesh file]" << std::endl;
+    std::cout << "  -texcoords <file>  [specify texture coordinate file]" << std::endl;
+    std::cout << "  -texture <file>    [specify texture image]" << std::endl;
     std::cout << std::endl;
 
     std::cout << "Controls:" << std::endl;
     std::cout << "  general:" << std::endl;
-    std::cout << "    esc - exit glwarp << std::endl;" << std::endl;
+    std::cout << "    esc - exit glwarp" << std::endl;
     std::cout << "    r - reload transformation settings" << std::endl;
     std::cout << "    i - print mesh position and rotation information" << std::endl;
     std::cout << "    x - reset mesh position and rotation" << std::endl;
@@ -240,20 +248,20 @@ void print_help()
 void parseCommandLineArgs(int argc, char *argv[])
 {
     InputParser input_parser(argc, argv);
-    if (input_parser.cmdOptionExists("-capture")) {
-        std::string opt = input_parser.getCmdOption("-capture");
-        if (opt == "true")
-            capture_flag = true;
-        else
-            capture_flag = false;
-    } else {
-        capture_flag = false;
-    }
+
+    print_fps = input_parser.cmdOptionExists("-fps");
+    show_polys = input_parser.cmdOptionExists("-poly");
+    vsync = input_parser.cmdOptionExists("-vsync");
+    capture_flag = input_parser.cmdOptionExists("-capture");
+
+    if(input_parser.cmdOptionExists("-h"))
+        print_help();
 
     if (input_parser.cmdOptionExists("-config")) {
         std::string opt = input_parser.getCmdOption("-config");
         if (opt != "") {
-            if (!loadConfig(opt)) {
+            bool success = loadConfig(opt);
+            if (!success) {
                 std::cout << "Info: There was no config file specified. Loading defaults!" << std::endl;
                 loadConfig("default/model.json");
             }
@@ -277,17 +285,96 @@ void parseCommandLineArgs(int argc, char *argv[])
         mesh_file = "default/default.mesh";
     }
 
-    if (input_parser.cmdOptionExists("-tex")) {
+    if (input_parser.cmdOptionExists("-texcoords")) {
         std::string opt = input_parser.getCmdOption("-tex");
         if (opt != "") {
             tex_file = opt;
         } else {
-            std::cout << "Info: There was no mesh file specified. Loading default!" << std::endl;
+            std::cout << "Info: There was no texture coordinates file specified. Loading default!" << std::endl;
             tex_file = "default/default.tex";
         }
     } else {
         tex_file = "default/default.tex";
     }
+
+    if (input_parser.cmdOptionExists("-texture")) {
+        std::string opt = input_parser.getCmdOption("-texture");
+        if (opt != "") {
+            texture_image = opt;
+        } else {
+            std::cout << "Info: There was no texture image in BMP format specified. Loading default!" << std::endl;
+            texture_image = "tex/default.bmp";
+        }
+    } else {
+        texture_image = "tex/default.bmp";
+    }
+}
+
+/**
+ * Initialize GL context
+ * @param show_polys
+ * @param with_vsync
+ * @return
+ */
+bool initializeGLContext(bool show_polys, bool with_vsync)
+{ //get x11 client reference
+    display = XOpenDisplay(nullptr);
+    root_window = DefaultRootWindow(display);
+
+    // Initialise GLFW
+    if (!glfwInit()) {
+        fprintf(stderr, "Failed to initialize GLFW\n");
+        return -1;
+    }
+
+    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Open a glfw_window and create its OpenGL context
+    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    SCREEN_WIDTH = mode->width;
+    SCREEN_HEIGHT = mode->height;
+
+    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
+    if (glfw_window == nullptr) {
+        fprintf(stderr, "Failed to open GLFW glfw_window\n");
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(glfw_window);
+
+    // Initialize GLEW
+    glewExperimental = GL_TRUE; // Needed for core profile
+
+    if (glewInit() != GLEW_OK) {
+        fprintf(stderr, "Failed to initialize GLEW\n");
+        return -1;
+    }
+
+    // input settings
+    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
+    glfwSetKeyCallback(glfw_window, keyCallback);
+
+    // init GL settings
+    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
+    glEnable(GL_DEPTH_TEST); // enable depth test
+    glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
+    glEnable(GL_PROGRAM_POINT_SIZE);
+
+    // set show polys flag to show vertice grid
+    if (show_polys) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
+    glfwSwapInterval(0);
+    if (with_vsync) {
+        glfwSwapInterval(1);
+    }
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -388,8 +475,6 @@ void handleFramewiseKeyInput()
 void loadTransformationValues()
 {
     triangle_count = 0;
-
-    std::cout << "FAADADA" << mesh_file << std::endl;
     vtx_buffer = setup_vertices(mesh_file.c_str(), &triangle_count);
     tex_buffer = setup_tex_coords(tex_file.c_str());
 }
@@ -417,154 +502,22 @@ void calculateView(glm::vec3 model_pos, glm::vec3 model_rot)
     MVP = projection * view * model;
 }
 
-/**
- * Initialize GL context
- * @param show_polys
- * @param with_vsync
- * @return
- */
-bool initializeGLContext(bool show_polys, bool with_vsync)
-{
-    //get x11 client reference
-    display = XOpenDisplay(nullptr);
-    root_window = DefaultRootWindow(display);
-
-    // Initialise GLFW
-    if (!glfwInit()) {
-        fprintf(stderr, "Failed to initialize GLFW\n");
-        return -1;
-    }
-
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // Open a glfw_window and create its OpenGL context
-    const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    SCREEN_WIDTH = mode->width;
-    SCREEN_HEIGHT = mode->height;
-
-    glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
-    if (glfw_window == nullptr) {
-        fprintf(stderr, "Failed to open GLFW glfw_window\n");
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(glfw_window);
-
-    // Initialize GLEW
-    glewExperimental = GL_TRUE; // Needed for core profile
-
-    if (glewInit() != GLEW_OK) {
-        fprintf(stderr, "Failed to initialize GLEW\n");
-        return -1;
-    }
-
-    // input settings
-    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
-    glfwSetKeyCallback(glfw_window, keyCallback);
-
-    // init GL settings
-    glfwSetInputMode(glfw_window, GLFW_STICKY_KEYS, GL_TRUE);
-    glEnable(GL_DEPTH_TEST); // enable depth test
-    glDepthFunc(GL_LESS); // Accept fragment if it closer to the camera than the former one
-    glEnable(GL_PROGRAM_POINT_SIZE);
-
-    // set show polys flag to show vertice grid
-    if (show_polys) {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-
-    glfwSwapInterval(0);
-    if (with_vsync) {
-        glfwSwapInterval(1);
-    }
-
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
-/**
- * load file from harddisk
- * @param filepath
- */
-bool loadFile(const char *filepath, std::vector<glm::vec3> *to_fill)
-{
-    std::ifstream f;
-    std::string s;
-
-    f.open(filepath, std::ios::in);
-
-    if (f.is_open()) {
-        std::cout << "Loading file: '" << filepath << "'!" << std::endl;
-        while (!f.eof()) {
-            getline(f, s);
-            std::istringstream iss(s);
-
-            float x, y, z;
-            iss >> x >> y >> z;
-            // std::cout << x << " " << y << " " << z << std::endl;
-
-            // append to input vector
-            to_fill->push_back(glm::vec3(x, y, z));
-        }
-
-        return true;
-    }
-
-    std::cout << "Error loading file: '" << filepath << "'!" << std::endl;
-    return false;
-}
-
-float mapToRange(float value, float in_min, float in_max, float out_min, float out_max)
-{
-    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-void mapVecToRange(std::vector<glm::vec3> *vec)
-{
-    float min_val_x = 999999;
-    float max_val_x = -999999;
-    float min_val_y = 999999;
-    float max_val_y = -999999;
-    for (auto item : *vec) {
-        if (item.x < min_val_x)
-            min_val_x = item.x;
-        if (item.x > max_val_x && item.x < 1000.0f)
-            max_val_x = item.x;
-        if (item.y < min_val_y)
-            min_val_y = item.y;
-        if (item.y > max_val_y)
-            max_val_y = item.y;
-    }
-
-    // map to dome grid to -1.0 to 1.0
-    for (int i = 0; i < vec->size(); ++i) {
-        float x, y, z;
-        x = mapToRange(vec->at(i).x, min_val_x, max_val_x, -1.0f, 1.0f);
-        y = mapToRange(vec->at(i).y, min_val_y, max_val_y, -1.0f, 1.0f);
-        vec->at(i) = glm::vec3(x, y, vec->at(i).z);
-    }
-
-}
-
 GLuint setup_vertices(const char *filepath, int *triangle_count)
 {
     std::vector<glm::vec3> mesh;
 
     // setup mesh
-    loadFile(filepath, &mesh);
+    FileIO::loadFile(filepath, &mesh);
     // get meta information about calculated
     auto circle_count = (int) mesh.back().x;
     auto points_per_circle = (int) mesh.back().y;
     auto point_count = (int) mesh.back().z;
-    std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
+//    std::cout << "circle count: " << circle_count << " points_per_circle: " << points_per_circle << std::endl;
 
     mesh.pop_back();
     mesh.pop_back();
     //mapVecToRange(&mesh);
-    std::cout << "blue size: " << mesh.size() << " read point count: " << point_count << std::endl;
+//    std::cout << "blue size: " << mesh.size() << " read point count: " << point_count << std::endl;
     if (mesh.size() != point_count) {
         std::cout << "Warp points do not match" << std::endl;
         return -1;
@@ -623,7 +576,7 @@ GLuint setup_tex_coords(const char *filepath)
 
     std::vector<glm::vec3> uv_coords;
     // setup mesh
-    loadFile(filepath, &uv_coords);
+    FileIO::loadFile(filepath, &uv_coords);
     // get meta information about calculated
     auto circle_count = (int) uv_coords.back().x;
     auto points_per_circle = (int) uv_coords.back().y;
@@ -631,7 +584,7 @@ GLuint setup_tex_coords(const char *filepath)
     uv_coords.pop_back();
     uv_coords.pop_back();
 
-    std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
+//    std::cout << "red size: " << uv_coords.size() << " read point count: " << point_count << std::endl;
     //mapVecToRange(&uv_coords);
     std::vector<glm::vec2> tex_vec;
     for (int circle_idx = 0; circle_idx < circle_count; ++circle_idx) {
@@ -746,6 +699,7 @@ bool loadConfig(const std::string &file_name)
         std::cout << "Error loading json: " << error << std::endl;
         return false;
     }
+    std::cout << std::endl;
 
     config = json.object_items();
 
@@ -754,15 +708,10 @@ bool loadConfig(const std::string &file_name)
 
 void parseConfig()
 {
-    std::cout << config.dump() << std::endl;
     float projector_x = (float) config["projector"]["position"]["x"].number_value();
     float projector_y = (float) config["projector"]["position"]["y"].number_value();
     float projector_z = (float) config["projector"]["position"]["z"].number_value();
 
-    std::cout << "x: " << (-1 * projector_x) << " y: " << (-1 * projector_y) << " z: " << (-1 * projector_z)
-              << std::endl;
-
-    glm::vec3 projector_position(-1* projector_x, -1* projector_y, -1* projector_z);
+    glm::vec3 projector_position(-1 * projector_x, -1 * projector_y, -1 * projector_z);
     model_position = projector_position;
 }
-

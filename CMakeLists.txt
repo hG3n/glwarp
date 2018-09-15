@@ -28,18 +28,20 @@ set(SOURCE_FILES
         src/shader.cpp
         src/json11.cpp
         src/input_parser.cpp
-        src/texture.cpp)
+        src/texture.cpp
+        src/file_io.cpp)
 
-set(HEADER_FILES
-        inc/shader.h
-        inc/json11.hpp
-        inc/input_parser.h
-        src/texture.cpp)
+#set(HEADER_FILES
+#        inc/shader.h
+#        inc/json11.hpp
+#        inc/input_parser.h
+#        inc/texture.h,
+#        file)
 
 # file config
 configure_file(shader/simple.vert ${CMAKE_CURRENT_BINARY_DIR}/shader/simple.vert COPYONLY)
 configure_file(shader/simple.frag ${CMAKE_CURRENT_BINARY_DIR}/shader/simple.frag COPYONLY)
-configure_file(tex/radialgrid.bmp ${CMAKE_CURRENT_BINARY_DIR}/tex/radialgrid.bmp COPYONLY)
+configure_file(tex/default.bmp ${CMAKE_CURRENT_BINARY_DIR}/tex/default.bmp COPYONLY)
 
 configure_file(default/model.json ${CMAKE_CURRENT_BINARY_DIR}/default/model.json COPYONLY)
 configure_file(default/default.mesh ${CMAKE_CURRENT_BINARY_DIR}/default/default.mesh COPYONLY)

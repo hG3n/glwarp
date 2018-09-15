@@ -10,8 +10,8 @@ InputParser::InputParser(int &argc, char **argv)
 const std::string &InputParser::getCmdOption(const std::string &option) const
 {
     std::vector<std::string>::const_iterator itr;
-    itr = std::find(this->tokens_.begin(), this->tokens_.end(), option);
-    if (itr != this->tokens_.end() && ++itr != this->tokens_.end()) {
+    itr = std::find(tokens_.begin(), tokens_.end(), option);
+    if (itr != tokens_.end() && ++itr != tokens_.end()) {
         return *itr;
     }
     static const std::string empty_string("");
@@ -20,7 +20,6 @@ const std::string &InputParser::getCmdOption(const std::string &option) const
 
 bool InputParser::cmdOptionExists(const std::string &option) const
 {
-    return std::find(this->tokens_.begin(), this->tokens_.end(), option)
-           != this->tokens_.end();
+    return std::find(tokens_.begin(), tokens_.end(), option) != tokens_.end();
 }
 
