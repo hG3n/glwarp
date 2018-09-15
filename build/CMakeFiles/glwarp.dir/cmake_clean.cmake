@@ -1,5 +1,6 @@
 file(REMOVE_RECURSE
   "CMakeFiles/glwarp.dir/main.cpp.o"
+  "CMakeFiles/glwarp.dir/src/shader.cpp.o"
   "glwarp.pdb"
   "glwarp"
 )

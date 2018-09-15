@@ -4,13 +4,13 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/domisgroup/Schreibtisch/glwarp/main.cpp" "/home/domisgroup/Schreibtisch/glwarp/build/CMakeFiles/glwarp.dir/main.cpp.o"
+  "/home/hgen/Desktop/glwarp/main.cpp" "/home/hgen/Desktop/glwarp/build/CMakeFiles/glwarp.dir/main.cpp.o"
+  "/home/hgen/Desktop/glwarp/src/shader.cpp" "/home/hgen/Desktop/glwarp/build/CMakeFiles/glwarp.dir/src/shader.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
-  "/usr/include/libdrm"
   )
 
 # Targets to which this target links.

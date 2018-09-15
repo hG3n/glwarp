@@ -1,3 +1,8 @@
 cmake-build-debug/
+build/
+build-home/
+
 .idea/
 .swp
+
+*.o

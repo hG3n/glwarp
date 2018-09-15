@@ -1,4 +1,4 @@
-#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
 
 #IncludeRegexScan: ^.*$
 
@@ -6,7 +6,11 @@
 
 #IncludeRegexTransform: 
 
-/home/domisgroup/Schreibtisch/glwarp/main.cpp
+/home/hgen/Desktop/glwarp/inc/shader.h
+GL/glew.h
+-
+
+/home/hgen/Desktop/glwarp/main.cpp
 iostream
 -
 vector
@@ -28,5 +32,19 @@ glm/glm.hpp
 glm/gtc/matrix_transform.hpp
 -
 sstream
+-
+inc/shader.h
+/home/hgen/Desktop/glwarp/inc/shader.h
+
+/home/hgen/Desktop/glwarp/src/shader.cpp
+../inc/shader.h
+/home/hgen/Desktop/glwarp/inc/shader.h
+iostream
+-
+vector
+-
+map
+-
+fstream
 -
 

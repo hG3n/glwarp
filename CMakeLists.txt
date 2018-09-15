@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6)
-project(GlWarp)
+project(glwarp)
 
 # Version Number
 set(GLWARP_VERISION_MAJOR 0)
@@ -22,8 +22,18 @@ endif ()
 
 # use pkg-config to find further libs
 pkg_check_modules(GLFW REQUIRED glfw3)
-#pkg_check_modules(GLM REQUIRED glm)
 
+set(SOURCE_FILES
+        main.cpp
+        src/shader.cpp)
+
+set(HEADER_FILES
+        inc/shader.h)
+
+# file config
+configure_file(shader/simple.vert ${CMAKE_CURRENT_BINARY_DIR}/shader/simple.vert COPYONLY)
+configure_file(shader/simple.frag ${CMAKE_CURRENT_BINARY_DIR}/shader/simple.frag COPYONLY)
+configure_file(tex/radialgrid.bmp ${CMAKE_CURRENT_BINARY_DIR}/tex/radialgrid.bmp COPYONLY)
 
 # libraries
 set(ALL_LIBS
@@ -33,10 +43,9 @@ set(ALL_LIBS
         ${X11_LIBRARIES})
 
 # specify executable
-add_executable(glwarp main.cpp)
+add_executable(glwarp ${SOURCE_FILES} ${HEADER_FILES})
 
 # get include directories
 include_directories(${GLFW_INCLUDE_DIRS} ${GLEW_INLCUDE_DIRS} ${GLM_INCLUDE_DIRS} ${X11_INCLUDE_DIRS})
 
 target_link_libraries(glwarp ${ALL_LIBS})
-

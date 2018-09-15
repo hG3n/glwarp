@@ -17,6 +17,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <sstream>
 
+#include "inc/shader.h"
+
 // gl globals
 GLFWwindow *glfw_window;
 Display *display;
@@ -28,9 +30,9 @@ int SCREEN_HEIGHT = (int) 1080;
 
 bool VSYNC = false;
 #if 0
-    bool capture_flag = false;
+bool capture_flag = false;
 #else
-    bool capture_flag = true;
+bool capture_flag = true;
 #endif
 
 bool show_points = false;
@@ -51,36 +53,46 @@ glm::mat4 MVP;
 
 
 void print_help();
+
 GLuint init_static_texture();
+
 GLuint init_dynamic_texture(Display *dis, Window win, XImage *image);
+
 void loadTransformationValues();
+
 void calculateView(glm::vec3, glm::vec3);
-GLuint LoadShaders(const char *, const char *);
+
 bool loadFile(const char *, std::vector <glm::vec3> *);
+
 GLuint setup_vertices(const char *filepath, int *triangle_count);
+
 GLuint setup_tex_coords(const char *filepath);
+
 GLuint loadBMP_custom(const char *);
+
 float mapToRange(float value, float in_min, float in_max, float out_min, float out_max);
+
 bool initializeGLContext(bool show_polys, bool with_vsync);
+
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+
 void handle_framewise_key_input();
 
-
-int main(int argc, char *argv[]) {
-
+int main(int argc, char *argv[])
+{
 
     const char *capture = argv[1];
-    if(!capture) { 
-        if(capture == "true") {
+    if (!capture) {
+        if (capture == "true") {
             capture_flag = true;
-        } else if( capture == "false"){
+        } else if (capture == "false") {
             capture_flag = false;
         } else {
             std::cout << "Invalid parameter" << std::endl;
             std::cout << "pass 'true' or 'false' to activate/deactivate capturing" << std::endl;
-            std::cout << std::endl; 
+            std::cout << std::endl;
         }
-    } 
+    }
 
     print_help();
 
@@ -91,15 +103,15 @@ int main(int argc, char *argv[]) {
     glBindVertexArray(vertex_array_id);
 
     // load shaders
-    GLuint program_id = LoadShaders("simple.vert", "simple.frag");
+    GLuint program_id = Shader::loadShaders("shader/simple.vert", "shader/simple.frag");
     GLint matrix_id = glGetUniformLocation(program_id, "MVP");
 
     GLuint tex;
-    if(capture_flag) {
+    if (capture_flag)
         tex = init_dynamic_texture(display, root_window, image);
-    } else {
-        tex = loadBMP_custom("radialgrid.bmp");
-    }
+    else
+        tex = loadBMP_custom("tex/radialgrid.bmp");
+
     GLint tex_id = glGetUniformLocation(program_id, "myTextureSampler");
 
     calculateView(model_position, model_rotation);
@@ -113,11 +125,9 @@ int main(int argc, char *argv[]) {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (!paused) {
-            /**
-             * print render time per frame
-             */
-            // print ms per frame
-            if(print_fps) {
+
+            ///print render time per frame
+            if (print_fps) {
                 ++num_frames;
                 double current_time = glfwGetTime();
                 if (current_time - last_time >= 1.0) {
@@ -127,6 +137,7 @@ int main(int argc, char *argv[]) {
                 }
             }
 
+            /// capture if set true
             if (capture_flag) {
                 // get screenshot
                 image = XGetImage(display, root_window, 420, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, AllPlanes, ZPixmap);
@@ -149,8 +160,6 @@ int main(int argc, char *argv[]) {
             if (capture_flag) {
                 glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_HEIGHT, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
                                 image->data);
-                //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
-                //                image->data);
                 glUniform1i(tex_id, 0);
             } else if (!capture_flag) {
                 glActiveTexture(GL_TEXTURE0);
@@ -167,11 +176,11 @@ int main(int argc, char *argv[]) {
             glBindBuffer(GL_ARRAY_BUFFER, tex_buffer);
             glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void *) 0);
 
-            if (show_points) {
+            if (show_points)
                 glDrawArrays(GL_POINTS, 0, triangle_count * 3);
-            } else if (!show_points) {
+            else if (!show_points)
                 glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
-            }
+
 
             // draw
             glDisableVertexAttribArray(0);
@@ -181,37 +190,35 @@ int main(int argc, char *argv[]) {
             if (capture_flag) {
                 XDestroyImage(image);
             }
+
+            // Swap buffers
+            glfwSwapBuffers(glfw_window);
+            glfwPollEvents();
+
+            handle_framewise_key_input();
         }
 
-        // Swap buffers
-        glfwSwapBuffers(glfw_window);
-        glfwPollEvents();
+        // Cleanup VBO and shader
+        glDeleteBuffers(1, &vtx_buffer);
+        glDeleteBuffers(1, &tex_buffer);
+        glDeleteProgram(program_id);
+        glDeleteTextures(1, &tex);
+        glDeleteVertexArrays(1, &vertex_array_id);
 
-        handle_framewise_key_input();
+        XCloseDisplay(display);
 
+        // Close OpenGL glfw_window and terminate GLFW
+        glfwTerminate();
 
+        return 0;
     }
-
-    // Cleanup VBO and shader
-    glDeleteBuffers(1, &vtx_buffer);
-    glDeleteBuffers(1, &tex_buffer);
-    glDeleteProgram(program_id);
-    glDeleteTextures(1, &tex);
-    glDeleteVertexArrays(1, &vertex_array_id);
-
-    XCloseDisplay(display);
-
-    // Close OpenGL glfw_window and terminate GLFW
-    glfwTerminate();
-
-    return 0;
 }
 
-void print_help() {
-
-    std::cout << "GLWarp 0.1" << std::endl;
+void print_help()
+{
+    std::cout << "GLWarp 1.0b" << std::endl;
     std::cout << "==========" << std::endl;
-    std::cout <<  std::endl;
+    std::cout << std::endl;
 
     std::cout << "Controls:" << std::endl;
     std::cout << "  general:" << std::endl;
@@ -235,7 +242,8 @@ void print_help() {
     std::cout << "    4 - increase rotation factor" << std::endl;
 }
 
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
+{
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         running = false;
 
@@ -260,12 +268,14 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     }
 
     if (key == GLFW_KEY_I && action == GLFW_PRESS) {
-        std::cout << "model position: " << model_position.x << " " << model_position.y << " " << model_position.z << std::endl;
-        std::cout << "model rotation: " << model_rotation.x << " " << model_rotation.y << " " << model_rotation.z << std::endl;
+        std::cout << "model position: " << model_position.x << " " << model_position.y << " " << model_position.z
+                  << std::endl;
+        std::cout << "model rotation: " << model_rotation.x << " " << model_rotation.y << " " << model_rotation.z
+                  << std::endl;
     }
 
-    if(key == GLFW_KEY_F && action == GLFW_PRESS) {
-        if(print_fps)
+    if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+        if (print_fps)
             print_fps = false;
         else
             print_fps = true;
@@ -289,50 +299,58 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     }
 }
 
-void handle_framewise_key_input() {
-
+void handle_framewise_key_input()
+{
     if (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS) {
         model_position.z -= move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_S) == GLFW_PRESS) {
         model_position.z += move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_A) == GLFW_PRESS) {
         model_position.x -= move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_D) == GLFW_PRESS) {
         model_position.x += move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_J) == GLFW_PRESS) {
         model_position.y -= move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_K) == GLFW_PRESS) {
         model_position.y += move_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_H) == GLFW_PRESS) {
         model_rotation.x += rotation_factor;
         calculateView(model_position, model_rotation);
     }
+
     if (glfwGetKey(glfw_window, GLFW_KEY_L) == GLFW_PRESS) {
         model_rotation.x -= rotation_factor;
         calculateView(model_position, model_rotation);
     }
 }
 
-void loadTransformationValues() {
+void loadTransformationValues()
+{
     triangle_count = 0;
     vtx_buffer = setup_vertices("current.mesh", &triangle_count);
     tex_buffer = setup_tex_coords("current.tex");
 }
 
-void calculateView(glm::vec3 model_pos, glm::vec3 model_rot) {
-
+void calculateView(glm::vec3 model_pos, glm::vec3 model_rot)
+{
     // projection matrix
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
 
@@ -342,7 +360,6 @@ void calculateView(glm::vec3 model_pos, glm::vec3 model_rot) {
             glm::vec3(0.0, 0.0, 100.0), // camera lookat
             glm::vec3(0, 1, 0)  // up-vec
     );
-
 
     // model
     glm::mat4 model = glm::mat4(1.0f);
@@ -361,8 +378,8 @@ void calculateView(glm::vec3 model_pos, glm::vec3 model_rot) {
  * @param with_vsync
  * @return
  */
-bool initializeGLContext(bool show_polys, bool with_vsync) {
-
+bool initializeGLContext(bool show_polys, bool with_vsync)
+{
     //get x11 client reference
     display = XOpenDisplay(nullptr);
     root_window = DefaultRootWindow(display);
@@ -384,8 +401,6 @@ bool initializeGLContext(bool show_polys, bool with_vsync) {
     int width = mode->width;
     int height = mode->height;
 
-//    SCREEN_HEIGHT = height;
-//    SCREEN_WIDTH = width;
     glfw_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLWarp", nullptr, nullptr);
     if (glfw_window == nullptr) {
         fprintf(stderr, "Failed to open GLFW glfw_window\n");
@@ -396,6 +411,7 @@ bool initializeGLContext(bool show_polys, bool with_vsync) {
 
     // Initialize GLEW
     glewExperimental = GL_TRUE; // Needed for core profile
+
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
         return -1;
@@ -428,18 +444,16 @@ bool initializeGLContext(bool show_polys, bool with_vsync) {
  * load file from harddisk
  * @param filepath
  */
-bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill) {
-
+bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill)
+{
     std::ifstream f;
     std::string s;
 
     f.open(filepath, std::ios::in);
 
     if (f.is_open()) {
-
         std::cout << "Loading file: '" << filepath << "'!" << std::endl;
         while (!f.eof()) {
-
             getline(f, s);
             std::istringstream iss(s);
 
@@ -458,28 +472,26 @@ bool loadFile(const char *filepath, std::vector <glm::vec3> *to_fill) {
     }
 }
 
-float mapToRange(float value, float in_min, float in_max, float out_min, float out_max) {
+float mapToRange(float value, float in_min, float in_max, float out_min, float out_max)
+{
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void mapVecToRange(std::vector <glm::vec3> *vec) {
+void mapVecToRange(std::vector <glm::vec3> *vec)
+{
     float min_val_x = 999999;
     float max_val_x = -999999;
     float min_val_y = 999999;
     float max_val_y = -999999;
     for (auto item : *vec) {
-        if (item.x < min_val_x) {
+        if (item.x < min_val_x)
             min_val_x = item.x;
-        }
-        if (item.x > max_val_x && item.x < 1000.0f) {
+        if (item.x > max_val_x && item.x < 1000.0f)
             max_val_x = item.x;
-        }
-        if (item.y < min_val_y) {
+        if (item.y < min_val_y)
             min_val_y = item.y;
-        }
-        if (item.y > max_val_y) {
+        if (item.y > max_val_y)
             max_val_y = item.y;
-        }
     }
 
     // map to dome grid to -1.0 to 1.0
@@ -492,98 +504,8 @@ void mapVecToRange(std::vector <glm::vec3> *vec) {
 
 }
 
-GLuint LoadShaders(const char *vertex_file_path, const char *fragment_file_path) {
-
-    // Create the shaders
-    GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-    GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-
-    // Read the Vertex Shader code from the file
-    std::string VertexShaderCode;
-    std::ifstream VertexShaderStream(vertex_file_path, std::ios::in);
-    if (VertexShaderStream.is_open()) {
-        std::string Line = "";
-        while (getline(VertexShaderStream, Line))
-            VertexShaderCode += "\n" + Line;
-        VertexShaderStream.close();
-    } else {
-        printf("Impossible to open %s. Are you in the right directory ? Don't forget to read the FAQ !\n",
-               vertex_file_path);
-        getchar();
-        return 0;
-    }
-
-    // Read the Fragment Shader code from the file
-    std::string FragmentShaderCode;
-    std::ifstream FragmentShaderStream(fragment_file_path, std::ios::in);
-    if (FragmentShaderStream.is_open()) {
-        std::string Line = "";
-        while (getline(FragmentShaderStream, Line))
-            FragmentShaderCode += "\n" + Line;
-        FragmentShaderStream.close();
-    }
-
-    GLint Result = GL_FALSE;
-    int InfoLogLength;
-
-
-    // Compile Vertex Shader
-    printf("Compiling shader : %s\n", vertex_file_path);
-    char const *VertexSourcePointer = VertexShaderCode.c_str();
-    glShaderSource(VertexShaderID, 1, &VertexSourcePointer, NULL);
-    glCompileShader(VertexShaderID);
-
-    // Check Vertex Shader
-    glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
-    glGetShaderiv(VertexShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    if (InfoLogLength > 0) {
-        std::vector<char> VertexShaderErrorMessage(InfoLogLength + 1);
-        glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, &VertexShaderErrorMessage[0]);
-        printf("%s\n", &VertexShaderErrorMessage[0]);
-    }
-
-    // Compile Fragment Shader
-    printf("Compiling shader : %s\n", fragment_file_path);
-    char const *FragmentSourcePointer = FragmentShaderCode.c_str();
-    glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer, NULL);
-    glCompileShader(FragmentShaderID);
-
-    // Check Fragment Shader
-    glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
-    glGetShaderiv(FragmentShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    if (InfoLogLength > 0) {
-        std::vector<char> FragmentShaderErrorMessage(InfoLogLength + 1);
-        glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, &FragmentShaderErrorMessage[0]);
-        printf("%s\n", &FragmentShaderErrorMessage[0]);
-    }
-
-    // Link the program
-    printf("Linking program\n");
-    GLuint ProgramID = glCreateProgram();
-    glAttachShader(ProgramID, VertexShaderID);
-    glAttachShader(ProgramID, FragmentShaderID);
-    glLinkProgram(ProgramID);
-
-    // Check the program
-    glGetProgramiv(ProgramID, GL_LINK_STATUS, &Result);
-    glGetProgramiv(ProgramID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    if (InfoLogLength > 0) {
-        std::vector<char> ProgramErrorMessage(InfoLogLength + 1);
-        glGetProgramInfoLog(ProgramID, InfoLogLength, NULL, &ProgramErrorMessage[0]);
-        printf("%s\n", &ProgramErrorMessage[0]);
-    }
-
-
-    glDetachShader(ProgramID, VertexShaderID);
-    glDetachShader(ProgramID, FragmentShaderID);
-
-    glDeleteShader(VertexShaderID);
-    glDeleteShader(FragmentShaderID);
-
-    return ProgramID;
-}
-
-GLuint loadBMP_custom(const char *imagepath) {
+GLuint loadBMP_custom(const char *imagepath)
+{
 
     printf("Reading image %s\n", imagepath);
 
@@ -677,7 +599,8 @@ GLuint loadBMP_custom(const char *imagepath) {
     return textureID;
 }
 
-GLuint setup_vertices(const char *filepath, int *triangle_count) {
+GLuint setup_vertices(const char *filepath, int *triangle_count)
+{
     std::vector <glm::vec3> mesh;
 
     // setup mesh
@@ -751,7 +674,8 @@ GLuint setup_vertices(const char *filepath, int *triangle_count) {
 
 }
 
-GLuint setup_tex_coords(const char *filepath) {
+GLuint setup_tex_coords(const char *filepath)
+{
 
     std::vector <glm::vec3> uv_coords;
     // setup mesh
@@ -839,7 +763,8 @@ GLuint setup_tex_coords(const char *filepath) {
     return uv_buffer;
 }
 
-GLuint init_dynamic_texture(Display *dis, Window win, XImage *image) {
+GLuint init_dynamic_texture(Display *dis, Window win, XImage *image)
+{
     // CREATE AND INIT DYNAMIC TEXTURE FROM SCREEN
     GLuint dynamic_tex;
     // get initial image
