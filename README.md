@@ -1,9 +1,10 @@
 # glwarp
 
+A  software toolkit for real-time warping and configuration of single projector full-dome setups.
+
 # Setup
 
 ## Dependencies
-
 In order to build and run the project, several dependencies have to be met. Before installing further dependencies, make sure the Ubuntu `build-essentials` as well as `cmake` are installed. If not install them via
 
 ```
